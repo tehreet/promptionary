@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { CreateRoomCard } from "@/components/create-room-card";
 import { JoinRoomCard } from "@/components/join-room-card";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/profile";
 
 const steps = [
   {
@@ -20,7 +22,10 @@ const steps = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createSupabaseServerClient();
+  const profile = await getCurrentProfile(supabase);
+  const defaultName = profile?.display_name ?? null;
   return (
     <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-16 px-6 py-20">
       <section className="text-center space-y-5 pt-6 max-w-3xl">
@@ -31,8 +36,8 @@ export default function Home() {
       </section>
 
       <section className="flex flex-col md:flex-row gap-5 w-full max-w-3xl items-stretch justify-center">
-        <CreateRoomCard />
-        <JoinRoomCard />
+        <CreateRoomCard defaultName={defaultName} />
+        <JoinRoomCard defaultName={defaultName} />
       </section>
 
       <section className="w-full max-w-3xl">

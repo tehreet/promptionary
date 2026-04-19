@@ -35,6 +35,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Skip static assets + the auth callback route. Middleware auto-creates
+    // an anon session when no user is present, which would race with the
+    // OAuth / magic-link code exchange happening in /auth/callback.
+    "/((?!auth/callback|_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|icon|apple-icon|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

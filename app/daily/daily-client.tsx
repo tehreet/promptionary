@@ -43,8 +43,12 @@ export function DailyClient(props: {
   myTokens: Token[];
   leaderboard: LeaderRow[];
   currentPlayerId: string;
+  defaultName?: string | null;
 }) {
-  const initialName = useMemo(() => randomDisplayName(), []);
+  const initialName = useMemo(
+    () => props.defaultName ?? randomDisplayName(),
+    [props.defaultName],
+  );
   const router = useRouter();
   const [displayName, setDisplayName] = useState<string>(initialName);
   const [guess, setGuess] = useState<string>("");
@@ -64,12 +68,14 @@ export function DailyClient(props: {
   const [leaderboard, setLeaderboard] = useState<LeaderRow[]>(props.leaderboard);
 
   useEffect(() => {
+    // Server-provided signed-in profile name wins over localStorage.
+    if (props.defaultName) return;
     const stored =
       typeof window !== "undefined"
         ? window.localStorage.getItem("promptionary.display-name")
         : null;
     if (stored) setDisplayName(stored);
-  }, []);
+  }, [props.defaultName]);
 
   const alreadyDone = !!props.myGuess;
 

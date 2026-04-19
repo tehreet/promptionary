@@ -1,0 +1,148 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { signOutAction } from "@/app/actions/sign-out";
+
+type Profile = { display_name: string; avatar_url: string | null };
+
+export function UserMenu({ className = "" }: { className?: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const [isAnon, setIsAnon] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createSupabaseBrowserClient();
+
+    async function load() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (!user || user.is_anonymous) {
+        setIsAnon(true);
+        setProfile(null);
+        setLoaded(true);
+        return;
+      }
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      setIsAnon(false);
+      setProfile(
+        data
+          ? { display_name: data.display_name, avatar_url: data.avatar_url }
+          : {
+              display_name: user.email?.split("@")[0] ?? "player",
+              avatar_url: null,
+            },
+      );
+      setLoaded(true);
+    }
+
+    load();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => load());
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onClick);
+    return () => window.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  // Render the Sign-in CTA optimistically so the header isn't empty on first
+  // paint. If we later discover the user is signed in, the component swaps
+  // to the avatar pill below.
+  if (!loaded || isAnon) {
+    return (
+      <Link
+        href="/sign-in"
+        data-user-menu-signin="1"
+        className={`inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-card/70 backdrop-blur px-3 text-sm font-semibold text-foreground shadow-sm hover:bg-card transition ${className}`}
+      >
+        <span aria-hidden>👤</span>
+        <span>Sign in</span>
+      </Link>
+    );
+  }
+
+  const initial = profile?.display_name[0]?.toUpperCase() ?? "?";
+
+  return (
+    <div ref={popoverRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-user-menu="1"
+        className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-card/70 backdrop-blur pl-1 pr-3 text-sm font-semibold text-foreground shadow-sm hover:bg-card transition"
+      >
+        {profile?.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={profile.avatar_url}
+            alt=""
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            className="h-8 w-8 rounded-full flex items-center justify-center text-black font-black text-xs"
+            style={{
+              backgroundImage:
+                "linear-gradient(135deg, #6366f1 0%, #d946ef 55%, #f43f5e 100%)",
+              color: "white",
+            }}
+          >
+            {initial}
+          </span>
+        )}
+        <span className="hidden sm:inline max-w-[8rem] truncate">
+          {profile?.display_name}
+        </span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-12 z-50 min-w-[12rem] rounded-xl border border-border bg-popover text-popover-foreground shadow-xl p-1"
+        >
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            Signed in as
+            <div className="font-semibold text-foreground truncate">
+              {profile?.display_name}
+            </div>
+          </div>
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              role="menuitem"
+              data-user-menu-signout="1"
+              className="w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-muted transition"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}

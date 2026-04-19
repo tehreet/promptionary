@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Unbounded } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SfxToggle } from "@/components/sfx-toggle";
+import { UserMenu } from "@/components/user-menu";
 import "./globals.css";
 
 const geist = Geist({
@@ -67,6 +68,7 @@ export default function RootLayout({
           <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
             <SfxToggle />
             <ThemeToggle />
+            <UserMenu />
           </div>
           {children}
         </ThemeProvider>

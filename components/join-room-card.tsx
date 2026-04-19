@@ -8,8 +8,13 @@ import { Button } from "@/components/ui/button";
 import { joinRoomAction } from "@/app/actions/join-room";
 import { randomDisplayName } from "@/lib/player";
 
-export function JoinRoomCard() {
-  const initialName = useMemo(() => randomDisplayName(), []);
+export function JoinRoomCard({
+  defaultName,
+}: { defaultName?: string | null } = {}) {
+  const initialName = useMemo(
+    () => defaultName ?? randomDisplayName(),
+    [defaultName],
+  );
   const codeRef = useRef<HTMLInputElement>(null);
   return (
     <Card className="w-full max-w-sm bg-card/90 backdrop-blur border-border shadow-xl rounded-3xl">

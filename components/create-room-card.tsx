@@ -9,8 +9,13 @@ import { createRoomAction } from "@/app/actions/create-room";
 import { randomDisplayName } from "@/lib/player";
 import { PACK_IDS, PACK_LABELS, type PackId } from "@/lib/prompt-dimensions";
 
-export function CreateRoomCard() {
-  const initialName = useMemo(() => randomDisplayName(), []);
+export function CreateRoomCard({
+  defaultName,
+}: { defaultName?: string | null } = {}) {
+  const initialName = useMemo(
+    () => defaultName ?? randomDisplayName(),
+    [defaultName],
+  );
   const [advanced, setAdvanced] = useState(false);
   const [mode, setMode] = useState<"party" | "artist">("party");
   const [pack, setPack] = useState<PackId>("mixed");

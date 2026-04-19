@@ -1,6 +1,10 @@
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from "@/lib/supabase/server";
 import { ensureAnonSession } from "@/app/actions/auth";
 import { ensureDailyPuzzle, todayUtcDate } from "@/lib/daily";
+import { getCurrentProfile } from "@/lib/profile";
 import { DailyClient } from "./daily-client";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +51,9 @@ export default async function DailyPage() {
     existingTokens = tokens ?? [];
   }
 
+  const userClient = await createSupabaseServerClient();
+  const profile = await getCurrentProfile(userClient);
+
   return (
     <DailyClient
       date={date}
@@ -56,6 +63,7 @@ export default async function DailyPage() {
       myTokens={existingTokens}
       leaderboard={leaderboard ?? []}
       currentPlayerId={user.id}
+      defaultName={profile?.display_name ?? null}
     />
   );
 }
