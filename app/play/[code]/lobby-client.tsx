@@ -10,7 +10,9 @@ import { InviteCard } from "./invite-card";
 import { RoomChannelProvider } from "@/lib/room-channel";
 import { ChatPanel } from "@/components/chat-panel";
 import { HostControls } from "@/components/host-controls";
-import { PACK_LABELS, type PackId } from "@/lib/prompt-dimensions";
+import { PACK_IDS, PACK_LABELS, type PackId } from "@/lib/prompt-dimensions";
+
+type RoomMode = "party" | "artist";
 
 type Room = {
   id: string;
@@ -22,6 +24,7 @@ type Room = {
   pack?: PackId;
   max_rounds: number;
   guess_seconds: number;
+  reveal_seconds: number;
   round_num: number;
 };
 
@@ -86,6 +89,15 @@ function LobbyClientInner({
   const [starting, setStarting] = useState(false);
   const [teamsOn, setTeamsOn] = useState(!!room.teams_enabled);
   const [teamsBusy, setTeamsBusy] = useState(false);
+  const [mode, setMode] = useState<RoomMode>(
+    room.mode === "artist" ? "artist" : "party",
+  );
+  const [pack, setPack] = useState<PackId>(room.pack ?? "mixed");
+  const [maxRounds, setMaxRounds] = useState<number>(room.max_rounds);
+  const [guessSeconds, setGuessSeconds] = useState<number>(room.guess_seconds);
+  const [revealSeconds, setRevealSeconds] = useState<number>(
+    room.reveal_seconds,
+  );
   const isHost = hostId === currentPlayerId;
 
   useEffect(() => {
@@ -149,10 +161,20 @@ function LobbyClientInner({
             phase: string;
             host_id: string;
             teams_enabled?: boolean;
+            mode?: string;
+            pack?: PackId;
+            max_rounds?: number;
+            guess_seconds?: number;
+            reveal_seconds?: number;
           };
           setPhase(next.phase);
           if (next.host_id) setHostId(next.host_id);
           if (typeof next.teams_enabled === "boolean") setTeamsOn(next.teams_enabled);
+          if (next.mode === "artist" || next.mode === "party") setMode(next.mode);
+          if (next.pack) setPack(next.pack);
+          if (typeof next.max_rounds === "number") setMaxRounds(next.max_rounds);
+          if (typeof next.guess_seconds === "number") setGuessSeconds(next.guess_seconds);
+          if (typeof next.reveal_seconds === "number") setRevealSeconds(next.reveal_seconds);
         },
       )
       .subscribe();
@@ -168,12 +190,19 @@ function LobbyClientInner({
       if (data) setPlayers(data as Player[]);
       const { data: r } = await supabase
         .from("rooms")
-        .select("phase, host_id, teams_enabled")
+        .select(
+          "phase, host_id, teams_enabled, mode, pack, max_rounds, guess_seconds, reveal_seconds",
+        )
         .eq("id", room.id)
         .maybeSingle();
       if (r?.phase) setPhase(r.phase);
       if (r?.host_id) setHostId(r.host_id);
       if (typeof r?.teams_enabled === "boolean") setTeamsOn(r.teams_enabled);
+      if (r?.mode === "artist" || r?.mode === "party") setMode(r.mode);
+      if (r?.pack) setPack(r.pack as PackId);
+      if (typeof r?.max_rounds === "number") setMaxRounds(r.max_rounds);
+      if (typeof r?.guess_seconds === "number") setGuessSeconds(r.guess_seconds);
+      if (typeof r?.reveal_seconds === "number") setRevealSeconds(r.reveal_seconds);
     }, 2000);
 
     return () => {
@@ -226,6 +255,70 @@ function LobbyClientInner({
     }
   }
 
+  async function applySettings(
+    patch: Partial<{
+      p_mode: RoomMode;
+      p_pack: PackId;
+      p_max_rounds: number;
+      p_guess_seconds: number;
+      p_reveal_seconds: number;
+    }>,
+  ) {
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.rpc("update_room_settings", {
+      p_room_id: room.id,
+      ...patch,
+    });
+    if (error) throw error;
+  }
+
+  async function handleSetMode(next: RoomMode) {
+    const prev = mode;
+    setMode(next);
+    try {
+      await applySettings({ p_mode: next });
+    } catch (e) {
+      setMode(prev);
+      alert(e instanceof Error ? e.message : "failed to change mode");
+    }
+  }
+
+  async function handleSetPack(next: PackId) {
+    const prev = pack;
+    setPack(next);
+    try {
+      await applySettings({ p_pack: next });
+    } catch (e) {
+      setPack(prev);
+      alert(e instanceof Error ? e.message : "failed to change pack");
+    }
+  }
+
+  function clampAndSave(
+    field: "max_rounds" | "guess_seconds" | "reveal_seconds",
+    raw: string,
+  ) {
+    const bounds = {
+      max_rounds: { min: 1, max: 20, setter: setMaxRounds, prev: maxRounds, arg: "p_max_rounds" as const },
+      guess_seconds: { min: 15, max: 120, setter: setGuessSeconds, prev: guessSeconds, arg: "p_guess_seconds" as const },
+      reveal_seconds: { min: 5, max: 30, setter: setRevealSeconds, prev: revealSeconds, arg: "p_reveal_seconds" as const },
+    }[field];
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      bounds.setter(bounds.prev);
+      return;
+    }
+    const next = Math.min(bounds.max, Math.max(bounds.min, Math.trunc(parsed)));
+    bounds.setter(next);
+    if (next === bounds.prev) return;
+    applySettings({ [bounds.arg]: next } as Partial<Parameters<typeof applySettings>[0]>).catch(
+      (e) => {
+        bounds.setter(bounds.prev);
+        alert(e instanceof Error ? e.message : "failed to update setting");
+      },
+    );
+  }
+
   async function handleSwapTeam(playerId: string, currentTeam: number | null) {
     const nextTeam = currentTeam === 1 ? 2 : 1;
     const supabase = createSupabaseBrowserClient();
@@ -265,9 +358,9 @@ function LobbyClientInner({
 
       <InviteCard code={room.code} />
 
-      {room.mode !== "artist" && room.pack && (
+      {mode !== "artist" && pack && (
         <div
-          data-pack={room.pack}
+          data-pack={pack}
           className="sticker inline-flex items-center gap-2"
           style={
             {
@@ -277,13 +370,125 @@ function LobbyClientInner({
           }
         >
           <span className="text-base leading-none">
-            {PACK_LABELS[room.pack].emoji}
+            {PACK_LABELS[pack].emoji}
           </span>
           <span className="text-[10px] uppercase tracking-widest opacity-70">
             Pack
           </span>
-          <span className="font-bold">{PACK_LABELS[room.pack].title}</span>
+          <span className="font-bold">{PACK_LABELS[pack].title}</span>
         </div>
+      )}
+
+      {isHost && phase === "lobby" && (
+        <section
+          data-room-settings="1"
+          className="game-card bg-[var(--game-paper)] w-full max-w-2xl p-5 space-y-4"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-heading font-black uppercase tracking-widest text-[var(--game-ink)]/80">
+              Room settings
+            </h2>
+            <span className="text-[10px] uppercase tracking-widest text-[var(--game-ink)]/50">
+              Host only
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--game-ink)]/70">
+              Mode
+            </p>
+            <div role="radiogroup" aria-label="Mode" className="grid grid-cols-2 gap-2">
+              {(["party", "artist"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === m}
+                  data-mode={m}
+                  onClick={() => handleSetMode(m)}
+                  className="rounded-xl px-3 py-2 border-2 text-left transition"
+                  style={
+                    mode === m
+                      ? { background: "var(--game-ink)", color: "var(--game-canvas-yellow)", borderColor: "var(--game-ink)" }
+                      : { background: "var(--game-paper)", color: "var(--game-ink)", borderColor: "var(--game-ink)" }
+                  }
+                >
+                  <p className="text-sm font-black">
+                    {m === "party" ? "Party" : "Artist"}
+                  </p>
+                  <p className="text-[11px] opacity-80">
+                    {m === "party" ? "AI writes · all guess" : "One writes · others guess"}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mode !== "artist" && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--game-ink)]/70">
+                Theme pack
+              </p>
+              <div
+                role="radiogroup"
+                aria-label="Theme pack"
+                className="flex flex-wrap gap-1.5"
+              >
+                {PACK_IDS.map((p) => {
+                  const meta = PACK_LABELS[p];
+                  const active = pack === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      data-pack={p}
+                      onClick={() => handleSetPack(p)}
+                      title={meta.blurb}
+                      className="rounded-full px-3 py-1.5 text-xs font-black border-2 transition"
+                      style={
+                        active
+                          ? { background: "var(--game-ink)", color: "var(--game-canvas-yellow)", borderColor: "var(--game-ink)" }
+                          : { background: "var(--game-paper)", color: "var(--game-ink)", borderColor: "var(--game-ink)" }
+                      }
+                    >
+                      <span className="mr-1">{meta.emoji}</span>
+                      {meta.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-2">
+            <SettingField
+              id="cfg-maxRounds"
+              label="Rounds"
+              value={maxRounds}
+              min={1}
+              max={20}
+              onCommit={(v) => clampAndSave("max_rounds", v)}
+            />
+            <SettingField
+              id="cfg-guessSeconds"
+              label="Guess (s)"
+              value={guessSeconds}
+              min={15}
+              max={120}
+              onCommit={(v) => clampAndSave("guess_seconds", v)}
+            />
+            <SettingField
+              id="cfg-revealSeconds"
+              label="Reveal (s)"
+              value={revealSeconds}
+              min={5}
+              max={30}
+              onCommit={(v) => clampAndSave("reveal_seconds", v)}
+            />
+          </div>
+        </section>
       )}
 
       {isHost && phase === "lobby" && (
@@ -585,5 +790,57 @@ function LobbyClientInner({
         <ChatPanel roomPhase={phase} isSpectator={false} variant="inline" />
       </div>
     </main>
+  );
+}
+
+function SettingField({
+  id,
+  label,
+  value,
+  min,
+  max,
+  onCommit,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onCommit: (raw: string) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  // Keep local draft in sync if another surface updates the value (realtime).
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+  return (
+    <div className="space-y-1">
+      <label
+        htmlFor={id}
+        className="text-[10px] uppercase tracking-wider font-bold text-[var(--game-ink)]/70"
+      >
+        {label}
+      </label>
+      <input
+        id={id}
+        type="number"
+        value={draft}
+        min={min}
+        max={max}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => onCommit(draft)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        className="w-full bg-white border-2 rounded-lg h-10 px-2 text-sm"
+        style={{
+          borderColor: "var(--game-ink)",
+          color: "var(--game-ink)",
+        }}
+      />
+    </div>
   );
 }

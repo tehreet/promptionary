@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { joinRoomAs, submitGuess } from "./helpers";
+import { createRoomAs, joinRoomAs, submitGuess } from "./helpers";
 
 test("artist mode + teams: toggle coexists, team leaderboard at game over", async ({
   browser,
@@ -11,24 +11,11 @@ test("artist mode + teams: toggle coexists, team leaderboard at game over", asyn
   const stamp = Date.now();
   const hostName = `H${stamp}`;
 
-  await host.goto("/");
-  const nameInput = host.getByLabel("Your name").first();
-  await nameInput.click();
-  await nameInput.press("ControlOrMeta+a");
-  await nameInput.fill(hostName);
-  await host.getByRole("button", { name: "Artist" }).click();
-  await host.getByRole("button", { name: /Customize rounds/ }).click();
-  const maxRounds = host.locator("#cfg-maxRounds");
-  await maxRounds.click();
-  await maxRounds.press("ControlOrMeta+a");
-  await maxRounds.fill("1");
-  const revealSeconds = host.locator("#cfg-revealSeconds");
-  await revealSeconds.click();
-  await revealSeconds.press("ControlOrMeta+a");
-  await revealSeconds.fill("5");
-  await host.getByRole("button", { name: "Create Room" }).click();
-  await host.waitForURL(/\/play\/[A-Z]{4}$/, { timeout: 30_000 });
-  const code = host.url().match(/\/play\/([A-Z]{4})$/)![1];
+  const code = await createRoomAs(host, hostName, {
+    mode: "artist",
+    maxRounds: 1,
+    revealSeconds: 5,
+  });
 
   const p2Ctx = await browser.newContext();
   const p2 = await p2Ctx.newPage();
