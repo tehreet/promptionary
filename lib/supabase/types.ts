@@ -286,6 +286,15 @@ export type Database = {
         Returns: string
       }
       leave_room: { Args: { p_room_id: string }; Returns: undefined }
+      play_again: {
+        Args: {
+          p_guess_seconds?: number
+          p_max_rounds?: number
+          p_reveal_seconds?: number
+          p_room_id: string
+        }
+        Returns: undefined
+      }
       start_round: { Args: { p_room_id: string }; Returns: string }
       submit_artist_prompt: {
         Args: { p_prompt: string; p_round_id: string }

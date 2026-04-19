@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -80,8 +81,15 @@ export function GameClient({
   currentPlayerId: string;
   isSpectator?: boolean;
 }) {
+  const router = useRouter();
   const [room, setRoom] = useState<Room>(initialRoom);
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
+
+  // When the room flips back to lobby (after a Play Again), hand control to
+  // the lobby server component via a refresh.
+  useEffect(() => {
+    if (room.phase === "lobby") router.refresh();
+  }, [room.phase, router]);
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
   const [myGuess, setMyGuess] = useState<string>("");
   const [guessSubmitted, setGuessSubmitted] = useState<boolean>(false);
@@ -680,33 +688,158 @@ export function GameClient({
           </ul>
 
           {room.phase === "game_over" && (
-            <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-6 mt-4">
-              <p className="text-center text-xs uppercase tracking-widest opacity-70 mb-3">
-                Final leaderboard
-              </p>
-              <ul className="space-y-2">
-                {leaderboard.map((p, i) => (
-                  <li
-                    key={p.player_id}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2 bg-white/10"
-                  >
-                    <span className="w-6 text-center font-black opacity-70">{i + 1}</span>
-                    <span
-                      className="h-8 w-8 rounded-full flex items-center justify-center text-black font-black"
-                      style={{ background: colorForPlayer(p.player_id) }}
+            <>
+              <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-6 mt-4">
+                <p className="text-center text-xs uppercase tracking-widest opacity-70 mb-3">
+                  Final leaderboard
+                </p>
+                <ul className="space-y-2">
+                  {leaderboard.map((p, i) => (
+                    <li
+                      key={p.player_id}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2 bg-white/10"
                     >
-                      {p.display_name[0]?.toUpperCase()}
-                    </span>
-                    <span className="flex-1 font-semibold truncate">{p.display_name}</span>
-                    <span className="font-black font-mono text-xl">{p.score}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                      <span className="w-6 text-center font-black opacity-70">
+                        {i + 1}
+                      </span>
+                      <span
+                        className="h-8 w-8 rounded-full flex items-center justify-center text-black font-black"
+                        style={{ background: colorForPlayer(p.player_id) }}
+                      >
+                        {p.display_name[0]?.toUpperCase()}
+                      </span>
+                      <span className="flex-1 font-semibold truncate">
+                        {p.display_name}
+                      </span>
+                      <span className="font-black font-mono text-xl">{p.score}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <PlayAgainControls room={room} isHost={isHost} />
+            </>
           )}
         </section>
       )}
     </main>
+  );
+}
+
+function PlayAgainControls({ room, isHost }: { room: Room; isHost: boolean }) {
+  const [advanced, setAdvanced] = useState(false);
+  const [maxRounds, setMaxRounds] = useState(room.max_rounds);
+  const [guessSeconds, setGuessSeconds] = useState(room.guess_seconds);
+  const [revealSeconds, setRevealSeconds] = useState(room.reveal_seconds);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const supabaseRef = useRef(createSupabaseBrowserClient());
+
+  async function playAgain() {
+    setLoading(true);
+    setError(null);
+    const supabase = supabaseRef.current;
+    const { error: err } = await supabase.rpc("play_again", {
+      p_room_id: room.id,
+      p_max_rounds: maxRounds,
+      p_guess_seconds: guessSeconds,
+      p_reveal_seconds: revealSeconds,
+    });
+    if (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  }
+
+  if (!isHost) {
+    return (
+      <p className="text-sm opacity-80 mt-4 text-center">
+        Waiting for the host to start another game…
+      </p>
+    );
+  }
+
+  return (
+    <div className="w-full flex flex-col gap-3 mt-4">
+      {advanced && (
+        <div className="grid grid-cols-3 gap-2 rounded-xl bg-white/10 p-3">
+          <NumField
+            label="Rounds"
+            value={maxRounds}
+            min={1}
+            max={20}
+            onChange={setMaxRounds}
+          />
+          <NumField
+            label="Guess (s)"
+            value={guessSeconds}
+            min={15}
+            max={120}
+            onChange={setGuessSeconds}
+          />
+          <NumField
+            label="Reveal (s)"
+            value={revealSeconds}
+            min={5}
+            max={30}
+            onChange={setRevealSeconds}
+          />
+        </div>
+      )}
+      <div className="flex items-center gap-3 justify-center">
+        <Button
+          onClick={playAgain}
+          disabled={loading}
+          className="bg-white text-indigo-700 hover:bg-white/90 font-bold text-lg px-8 py-6 rounded-2xl"
+        >
+          {loading ? "Resetting…" : "Play Again"}
+        </Button>
+        <button
+          type="button"
+          onClick={() => setAdvanced((v) => !v)}
+          className="text-xs opacity-80 hover:opacity-100 underline-offset-4 hover:underline"
+        >
+          {advanced ? "hide settings" : "adjust settings"}
+        </button>
+      </div>
+      {error && (
+        <div className="text-sm bg-red-500/30 rounded-xl p-3 text-center">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NumField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="space-y-1 block">
+      <span className="text-[10px] uppercase tracking-wider text-white/70">
+        {label}
+      </span>
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, Math.trunc(n))));
+        }}
+        className="w-full bg-white/20 border border-white/30 rounded-lg text-white text-center font-mono h-9 px-2"
+      />
+    </label>
   );
 }
 
