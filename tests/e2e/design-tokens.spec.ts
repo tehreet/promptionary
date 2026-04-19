@@ -61,4 +61,9 @@ test.describe("design tokens", () => {
   // out on local Gemini latency. The same surface is already covered by
   // recap.spec.ts (flipboard tokens) and, implicitly, by full-round.spec.ts.
   // Leaving the extra smoke out to keep this suite fast + deterministic.
+
+  test("/daily uses game-canvas-page", async ({ page }) => {
+    await page.goto("/daily");
+    await expect(page.locator("main").first()).toHaveClass(/game-canvas-page/);
+  });
 });
