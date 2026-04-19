@@ -253,7 +253,22 @@ export type Database = {
       }
     }
     Functions: {
+      create_room: {
+        Args: {
+          p_display_name: string
+          p_mode?: Database["public"]["Enums"]["room_mode"]
+        }
+        Returns: {
+          code: string
+          room_id: string
+        }[]
+      }
       generate_room_code: { Args: never; Returns: string }
+      join_room_by_code: {
+        Args: { p_code: string; p_display_name: string }
+        Returns: string
+      }
+      leave_room: { Args: { p_room_id: string }; Returns: undefined }
       start_round: { Args: { p_room_id: string }; Returns: string }
       submit_guess: {
         Args: { p_guess: string; p_round_id: string }
