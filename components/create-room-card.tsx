@@ -11,6 +11,7 @@ import { randomDisplayName } from "@/lib/player";
 export function CreateRoomCard() {
   const initialName = useMemo(() => randomDisplayName(), []);
   const [advanced, setAdvanced] = useState(false);
+  const [mode, setMode] = useState<"party" | "artist">("party");
   return (
     <Card className="w-full max-w-sm bg-white/10 backdrop-blur border-white/20 text-white shadow-2xl">
       <CardHeader>
@@ -30,6 +31,37 @@ export function CreateRoomCard() {
               required
               className="bg-white/20 border-white/30 placeholder:text-white/50 text-white"
             />
+          </div>
+
+          <input type="hidden" name="mode" value={mode} />
+          <div className="space-y-1.5">
+            <Label className="text-white/90">Mode</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setMode("party")}
+                className={`rounded-xl px-3 py-2 border text-left transition ${
+                  mode === "party"
+                    ? "bg-white text-indigo-700 border-white font-bold"
+                    : "bg-white/10 border-white/30 hover:bg-white/20"
+                }`}
+              >
+                <p className="text-sm font-semibold">Party</p>
+                <p className="text-[11px] opacity-80">AI picks the prompt</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("artist")}
+                className={`rounded-xl px-3 py-2 border text-left transition ${
+                  mode === "artist"
+                    ? "bg-white text-rose-600 border-white font-bold"
+                    : "bg-white/10 border-white/30 hover:bg-white/20"
+                }`}
+              >
+                <p className="text-sm font-semibold">Artist</p>
+                <p className="text-[11px] opacity-80">You write the prompts</p>
+              </button>
+            </div>
           </div>
 
           <button

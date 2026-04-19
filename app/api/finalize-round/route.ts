@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
   const { data: round } = await svc
     .from("rounds")
-    .select("id, room_id, prompt, ended_at, round_num")
+    .select("id, room_id, prompt, ended_at, round_num, artist_player_id")
     .eq("id", round_id)
     .maybeSingle();
   if (!round)
@@ -64,10 +64,13 @@ export async function POST(req: Request) {
     .update({ phase: "scoring", phase_ends_at: null })
     .eq("id", room.id);
 
+  // On artist rounds, exclude the artist from guessing even if somehow
+  // submitted — their score comes from the guessers' average.
   const { data: guesses } = await svc
     .from("guesses")
     .select("id, player_id, guess, submitted_at")
-    .eq("round_id", round.id);
+    .eq("round_id", round.id)
+    .neq("player_id", round.artist_player_id ?? "00000000-0000-0000-0000-000000000000");
 
   const { data: tokens } = await svc
     .from("round_prompt_tokens")
@@ -120,6 +123,18 @@ export async function POST(req: Request) {
         scored_at: new Date().toISOString(),
       })
       .eq("id", g.id);
+  }
+
+  // Artist-mode: reward the artist with the average guesser score for the
+  // round so they're incentivized to write "guessable but not trivial" prompts.
+  if (round.artist_player_id) {
+    const deltas = Object.values(playerScoreDelta);
+    const artistDelta =
+      deltas.length > 0
+        ? Math.round(deltas.reduce((a, b) => a + b, 0) / deltas.length)
+        : 0;
+    playerScoreDelta[round.artist_player_id] =
+      (playerScoreDelta[round.artist_player_id] ?? 0) + artistDelta;
   }
 
   for (const [playerId, delta] of Object.entries(playerScoreDelta)) {

@@ -11,6 +11,7 @@ type Room = {
   code: string;
   phase: string;
   host_id: string;
+  mode: string;
   max_rounds: number;
   guess_seconds: number;
   reveal_seconds: number;
@@ -31,6 +32,7 @@ type Round = {
   round_num: number;
   prompt: string | null;
   image_url: string | null;
+  artist_player_id: string | null;
   ended_at: string | null;
 };
 
@@ -91,7 +93,14 @@ export function GameClient({
     () => players.filter((p) => !p.is_spectator).length,
     [players],
   );
-  const submissionTotal = competitorCount || players.length;
+  // Artist-mode guessers = non-spectators excluding the round's artist.
+  const guesserCount = competitorCount;
+  const submissionTotal = (() => {
+    if (currentRound?.artist_player_id) {
+      return Math.max(0, guesserCount - 1);
+    }
+    return guesserCount || players.length;
+  })();
   const generatingCalledRef = useRef<string | null>(null);
   const finalizeCalledRef = useRef<string | null>(null);
   const revealAdvanceRef = useRef<string | null>(null);
@@ -161,7 +170,7 @@ export function GameClient({
       const { data: r } = await supabase
         .from("rooms")
         .select(
-          "id, code, phase, host_id, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
+          "id, code, phase, host_id, mode, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
         )
         .eq("id", room.id)
         .maybeSingle();
@@ -180,7 +189,7 @@ export function GameClient({
       if (targetRoundNum > 0) {
         const { data: rd } = await supabase
           .from("rounds_public")
-          .select("id, round_num, prompt, image_url, ended_at")
+          .select("id, round_num, prompt, image_url, artist_player_id, ended_at")
           .eq("room_id", room.id)
           .eq("round_num", targetRoundNum)
           .maybeSingle();
@@ -234,6 +243,16 @@ export function GameClient({
           }
           return data as Round;
         });
+      } else if (!cancel) {
+        // Fallback for artist mode: rounds_public may not reveal the artist
+        // field if RLS is stricter. Fetch directly.
+        const { data: raw } = await supabase
+          .from("rounds")
+          .select("id, round_num, image_url, artist_player_id, ended_at")
+          .eq("room_id", room.id)
+          .eq("round_num", room.round_num)
+          .maybeSingle();
+        if (raw) setCurrentRound({ ...raw, prompt: null } as Round);
       }
     })();
     return () => {
@@ -243,12 +262,21 @@ export function GameClient({
 
   const [startError, setStartError] = useState<string | null>(null);
 
-  // Host triggers /api/start-round when phase=generating (and we have a round id)
+  // Host (or the artist on artist-mode) triggers /api/start-round when
+  // phase=generating. On artist mode the artist already submitted their
+  // prompt via /api/submit-artist-prompt which calls start-round internally,
+  // so this effect becomes a safety net rather than the primary driver.
+  const isArtistRound = !!currentRound?.artist_player_id;
+  const iAmArtist =
+    isArtistRound && currentRound?.artist_player_id === currentPlayerId;
   useEffect(() => {
-    if (!isHost) return;
     if (room.phase !== "generating") return;
     if (!currentRound?.id) return;
     if (generatingCalledRef.current === currentRound.id) return;
+    // Default mode: host drives. Artist mode: the artist already triggered
+    // start-round via submit-artist-prompt; skip here.
+    if (room.mode === "artist") return;
+    if (!isHost) return;
     generatingCalledRef.current = currentRound.id;
     setStartError(null);
     (async () => {
@@ -266,7 +294,7 @@ export function GameClient({
         setStartError(e instanceof Error ? e.message : String(e));
       }
     })();
-  }, [isHost, room.phase, currentRound?.id]);
+  }, [isHost, room.phase, room.mode, currentRound?.id]);
 
   // Any member triggers /api/finalize-round when the guessing timer expires
   // OR when every competitor has submitted (via submissionCount, which the
@@ -434,6 +462,20 @@ export function GameClient({
         </section>
       )}
 
+      {room.phase === "prompting" && (
+        <ArtistPromptingView
+          room={room}
+          currentRound={currentRound}
+          iAmArtist={iAmArtist}
+          artist={
+            currentRound?.artist_player_id
+              ? playerById.get(currentRound.artist_player_id)
+              : undefined
+          }
+          remaining={remaining}
+        />
+      )}
+
       {room.phase === "generating" && (
         <div className="flex flex-col items-center gap-4 py-20 max-w-xl text-center">
           {startError ? (
@@ -462,6 +504,25 @@ export function GameClient({
 
       {room.phase === "guessing" && (
         <section className="w-full max-w-2xl flex flex-col items-center gap-5">
+          {isArtistRound && currentRound?.artist_player_id && (
+            <div className="flex items-center gap-2 text-sm opacity-90">
+              <span>Prompt by</span>
+              <span
+                className="h-6 w-6 rounded-full flex items-center justify-center text-black text-xs font-black"
+                style={{
+                  background: colorForPlayer(currentRound.artist_player_id),
+                }}
+              >
+                {playerById
+                  .get(currentRound.artist_player_id)
+                  ?.display_name[0]?.toUpperCase()}
+              </span>
+              <span className="font-semibold">
+                {playerById.get(currentRound.artist_player_id)?.display_name ??
+                  "the artist"}
+              </span>
+            </div>
+          )}
           <div className="w-full flex items-center justify-between">
             <p className="text-lg font-semibold opacity-90">
               Submissions: {submissionCount}/{submissionTotal}
@@ -478,6 +539,10 @@ export function GameClient({
           {isSpectator ? (
             <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-4 text-center">
               <p className="font-bold">Spectating — guesses are hidden until reveal.</p>
+            </div>
+          ) : iAmArtist ? (
+            <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-4 text-center">
+              <p className="font-bold">You wrote this one — watch the guesses come in ✨</p>
             </div>
           ) : guessSubmitted ? (
             <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-4 text-center">
@@ -611,5 +676,125 @@ export function GameClient({
         </section>
       )}
     </main>
+  );
+}
+
+function ArtistPromptingView({
+  room,
+  currentRound,
+  iAmArtist,
+  artist,
+  remaining,
+}: {
+  room: Room;
+  currentRound: Round | null;
+  iAmArtist: boolean;
+  artist: Player | undefined;
+  remaining: number;
+}) {
+  const [prompt, setPrompt] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (!currentRound?.id) return;
+    const text = prompt.trim();
+    if (text.length < 4) {
+      setError("at least 4 characters");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/submit-artist-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ round_id: currentRound.id, prompt: text }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.detail || body.error || `status ${res.status}`);
+        setSubmitting(false);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+  }
+
+  if (iAmArtist) {
+    return (
+      <section className="w-full max-w-2xl flex flex-col items-center gap-4">
+        <div className="flex items-center justify-between w-full">
+          <p className="text-lg font-semibold opacity-90">
+            You&rsquo;re the artist this round ✨
+          </p>
+          <p className="text-3xl font-black font-mono">{remaining}s</p>
+        </div>
+        <p className="text-sm opacity-80 text-center">
+          Write a secret prompt. Keep it guessable but not too easy — you score
+          the average of everyone&rsquo;s guesses.
+        </p>
+        {submitting ? (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <div className="h-14 w-14 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+            <p className="font-bold">Sending to the AI…</p>
+          </div>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+            className="w-full flex flex-col gap-3"
+          >
+            <Textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder="A raccoon delivering mail by bicycle in a watercolor cityscape at dusk..."
+              maxLength={240}
+              rows={4}
+              autoFocus
+              className="bg-white/20 border-white/30 placeholder:text-white/50 text-white text-lg rounded-xl min-h-[120px] resize-y leading-relaxed p-4"
+            />
+            <div className="flex items-center justify-between text-xs opacity-70">
+              <span>{prompt.length}/240</span>
+              <span>⌘/Ctrl + Enter to send</span>
+            </div>
+            {error && (
+              <div className="text-sm bg-red-500/30 rounded-xl p-3">{error}</div>
+            )}
+            <Button
+              type="submit"
+              disabled={prompt.trim().length < 4}
+              className="bg-white text-indigo-700 hover:bg-white/90 font-bold h-14 px-8 rounded-xl text-lg"
+            >
+              Send to the AI
+            </Button>
+          </form>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-4 py-16 max-w-md text-center">
+      <div className="h-20 w-20 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+      <p className="text-xl font-bold">
+        {artist?.display_name ?? "The artist"} is cooking something up…
+      </p>
+      <p className="opacity-70 text-sm">
+        When they&rsquo;re done, we&rsquo;ll see the AI&rsquo;s take.
+      </p>
+      {room.phase_ends_at && (
+        <p className="text-2xl font-black font-mono opacity-90">{remaining}s</p>
+      )}
+    </div>
   );
 }

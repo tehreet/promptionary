@@ -192,6 +192,7 @@ export type Database = {
       }
       rounds: {
         Row: {
+          artist_player_id: string | null
           ended_at: string | null
           id: string
           image_storage_path: string | null
@@ -202,6 +203,7 @@ export type Database = {
           started_at: string
         }
         Insert: {
+          artist_player_id?: string | null
           ended_at?: string | null
           id?: string
           image_storage_path?: string | null
@@ -212,6 +214,7 @@ export type Database = {
           started_at?: string
         }
         Update: {
+          artist_player_id?: string | null
           ended_at?: string | null
           id?: string
           image_storage_path?: string | null
@@ -235,6 +238,7 @@ export type Database = {
     Views: {
       rounds_public: {
         Row: {
+          artist_player_id: string | null
           ended_at: string | null
           id: string | null
           image_storage_path: string | null
@@ -283,13 +287,17 @@ export type Database = {
       }
       leave_room: { Args: { p_room_id: string }; Returns: undefined }
       start_round: { Args: { p_room_id: string }; Returns: string }
+      submit_artist_prompt: {
+        Args: { p_prompt: string; p_round_id: string }
+        Returns: undefined
+      }
       submit_guess: {
         Args: { p_guess: string; p_round_id: string }
         Returns: string
       }
     }
     Enums: {
-      room_mode: "party" | "teams" | "headsup"
+      room_mode: "party" | "teams" | "headsup" | "artist"
       room_phase:
         | "lobby"
         | "generating"
@@ -297,6 +305,7 @@ export type Database = {
         | "scoring"
         | "reveal"
         | "game_over"
+        | "prompting"
       token_role: "subject" | "style" | "modifier" | "filler"
     }
     CompositeTypes: {
@@ -425,7 +434,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      room_mode: ["party", "teams", "headsup"],
+      room_mode: ["party", "teams", "headsup", "artist"],
       room_phase: [
         "lobby",
         "generating",
@@ -433,6 +442,7 @@ export const Constants = {
         "scoring",
         "reveal",
         "game_over",
+        "prompting",
       ],
       token_role: ["subject", "style", "modifier", "filler"],
     },

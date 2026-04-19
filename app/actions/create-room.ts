@@ -16,9 +16,16 @@ export async function createRoomAction(formData: FormData) {
     return Number.isFinite(n) ? Math.trunc(n) : null;
   };
 
+  const rawMode = String(formData.get("mode") ?? "party");
+  const mode =
+    rawMode === "artist" || rawMode === "teams" || rawMode === "headsup"
+      ? rawMode
+      : "party";
+
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("create_room", {
     p_display_name: displayName,
+    p_mode: mode,
     p_max_rounds: intOrNull("maxRounds"),
     p_guess_seconds: intOrNull("guessSeconds"),
     p_reveal_seconds: intOrNull("revealSeconds"),

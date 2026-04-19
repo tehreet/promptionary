@@ -3,7 +3,11 @@ import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
-import { authorPromptWithRoles, generateImagePng } from "@/lib/gemini";
+import {
+  authorPromptWithRoles,
+  generateImagePng,
+  tagPromptRoles,
+} from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,7 +28,7 @@ export async function POST(req: Request) {
 
   const { data: round } = await svc
     .from("rounds")
-    .select("id, room_id, round_num")
+    .select("id, room_id, round_num, prompt, artist_player_id")
     .eq("id", round_id)
     .maybeSingle();
   if (!round)
@@ -32,13 +36,16 @@ export async function POST(req: Request) {
 
   const { data: room } = await svc
     .from("rooms")
-    .select("id, host_id, guess_seconds, phase")
+    .select("id, host_id, mode, guess_seconds, phase")
     .eq("id", round.room_id)
     .maybeSingle();
   if (!room)
     return NextResponse.json({ error: "room not found" }, { status: 404 });
 
-  if (room.host_id !== user.id) {
+  // On default modes the host drives start-round. On artist mode, any room
+  // member can POST here after the artist submits their prompt — the flip
+  // from 'prompting' -> 'generating' is what gates it.
+  if (room.mode !== "artist" && room.host_id !== user.id) {
     return NextResponse.json({ error: "not host" }, { status: 403 });
   }
   if (room.phase !== "generating") {
@@ -52,7 +59,26 @@ export async function POST(req: Request) {
   let tokens: Awaited<ReturnType<typeof authorPromptWithRoles>>["tokens"];
   let pngBuffer: Buffer;
   try {
-    ({ prompt, tokens } = await authorPromptWithRoles());
+    if (round.prompt && round.prompt.length > 0) {
+      // Artist-mode round: the artist already wrote the prompt. Tag it with
+      // Gemini so scoring can weight words by role, then skip authoring.
+      prompt = round.prompt;
+      ({ tokens } = await tagPromptRoles(prompt));
+    } else {
+      // Collect up to 5 most recent prompts so the author avoids repeats.
+      const { data: recentRounds } = await svc
+        .from("rounds")
+        .select("prompt")
+        .eq("room_id", round.room_id)
+        .not("prompt", "is", null)
+        .neq("prompt", "")
+        .order("round_num", { ascending: false })
+        .limit(5);
+      const previousPrompts = (recentRounds ?? [])
+        .map((r) => r.prompt)
+        .filter((p): p is string => !!p);
+      ({ prompt, tokens } = await authorPromptWithRoles(previousPrompts));
+    }
     pngBuffer = await generateImagePng(prompt);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
