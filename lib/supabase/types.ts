@@ -230,23 +230,50 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          best_round_score: number
           created_at: string
+          daily_longest_streak: number
+          daily_streak: number
           display_name: string
+          games_played: number
+          games_won: number
+          handle: string | null
           id: string
+          last_daily_on: string | null
+          rounds_played: number
+          total_score: number
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
+          best_round_score?: number
           created_at?: string
+          daily_longest_streak?: number
+          daily_streak?: number
           display_name: string
+          games_played?: number
+          games_won?: number
+          handle?: string | null
           id: string
+          last_daily_on?: string | null
+          rounds_played?: number
+          total_score?: number
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
+          best_round_score?: number
           created_at?: string
+          daily_longest_streak?: number
+          daily_streak?: number
           display_name?: string
+          games_played?: number
+          games_won?: number
+          handle?: string | null
           id?: string
+          last_daily_on?: string | null
+          rounds_played?: number
+          total_score?: number
           updated_at?: string
         }
         Relationships: []
@@ -503,6 +530,18 @@ export type Database = {
     }
     Functions: {
       auto_balance_teams: { Args: { p_room_id: string }; Returns: undefined }
+      bump_daily_streak: {
+        Args: { p_player_id: string; p_today: string }
+        Returns: undefined
+      }
+      bump_game_stats: {
+        Args: { p_did_win: boolean; p_player_id: string }
+        Returns: undefined
+      }
+      bump_round_stats: {
+        Args: { p_player_id: string; p_round_total: number }
+        Returns: undefined
+      }
       count_round_guesses: { Args: { p_round_id: string }; Returns: number }
       create_room: {
         Args: {
@@ -518,6 +557,7 @@ export type Database = {
           new_room_id: string
         }[]
       }
+      ensure_profile_handle: { Args: { p_user_id: string }; Returns: string }
       everyone_guessed: { Args: { p_round_id: string }; Returns: boolean }
       generate_room_code: { Args: never; Returns: string }
       is_room_member: { Args: { p_room_id: string }; Returns: boolean }
@@ -547,6 +587,10 @@ export type Database = {
       post_message: {
         Args: { p_content: string; p_room_id: string }
         Returns: string
+      }
+      promote_anon_for_passkey: {
+        Args: { p_display_name: string; p_email: string; p_user_id: string }
+        Returns: undefined
       }
       realtime_topic_room: { Args: { topic: string }; Returns: string }
       set_player_team: {

@@ -114,6 +114,14 @@ export async function POST(req: Request) {
     .gt("total_score", insert.data.total_score);
   const rank = (betterCount ?? 0) + 1;
 
+  // Streak bump for signed-in users; no-op for anon (no profiles row).
+  if (!user.is_anonymous) {
+    await svc.rpc("bump_daily_streak", {
+      p_player_id: user.id,
+      p_today: date,
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     total_score: insert.data.total_score,

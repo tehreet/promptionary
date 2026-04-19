@@ -71,6 +71,7 @@ export default async function RootLayout({
         profile: {
           display_name: profile.display_name,
           avatar_url: profile.avatar_url,
+          handle: profile.handle,
         },
       }
     : { isAnon: true as const, profile: null };

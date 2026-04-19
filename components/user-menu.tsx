@@ -5,7 +5,11 @@ import Link from "next/link";
 import { createSupabaseAuthBrowserClient } from "@/lib/supabase/client";
 import { signOutAction } from "@/app/actions/sign-out";
 
-type Profile = { display_name: string; avatar_url: string | null };
+type Profile = {
+  display_name: string;
+  avatar_url: string | null;
+  handle?: string | null;
+};
 
 export function UserMenu({
   className = "",
@@ -42,17 +46,22 @@ export function UserMenu({
       }
       const { data } = await supabase
         .from("profiles")
-        .select("display_name, avatar_url")
+        .select("display_name, avatar_url, handle")
         .eq("id", user.id)
         .maybeSingle();
       if (cancelled) return;
       setIsAnon(false);
       setProfile(
         data
-          ? { display_name: data.display_name, avatar_url: data.avatar_url }
+          ? {
+              display_name: data.display_name,
+              avatar_url: data.avatar_url,
+              handle: data.handle,
+            }
           : {
               display_name: user.email?.split("@")[0] ?? "player",
               avatar_url: null,
+              handle: null,
             },
       );
       setLoaded(true);
@@ -141,7 +150,22 @@ export function UserMenu({
             <div className="font-semibold text-foreground truncate">
               {profile?.display_name}
             </div>
+            {profile?.handle && (
+              <div className="font-mono text-[11px] truncate">
+                @{profile.handle}
+              </div>
+            )}
           </div>
+          {profile?.handle && (
+            <Link
+              href={`/u/${profile.handle}`}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="block rounded-lg px-3 py-2 text-sm hover:bg-muted transition"
+            >
+              Public profile
+            </Link>
+          )}
           <Link
             href="/account"
             role="menuitem"
