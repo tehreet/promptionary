@@ -63,89 +63,123 @@
   --brand-fuchsia: oklch(0.68 0.28 325);
   --brand-rose: oklch(0.69 0.24 15);
 
-  --background: oklch(0.985 0.008 65);
-  --foreground: oklch(0.16 0.02 270);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0.02 270);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.16 0.02 270);
-  --primary: var(--brand-indigo);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.96 0.02 290);
-  --secondary-foreground: oklch(0.2 0.04 270);
-  --muted: oklch(0.95 0.01 280);
-  --muted-foreground: oklch(0.45 0.03 270);
-  --accent: oklch(0.95 0.04 320);
-  --accent-foreground: oklch(0.2 0.06 320);
-  --destructive: oklch(0.58 0.24 27);
-  --border: oklch(0.9 0.02 280 / 80%);
-  --input: oklch(0.92 0.015 280);
-  --ring: oklch(0.57 0.24 268 / 50%);
+  --background: var(--game-canvas-warm);
+  --foreground: var(--game-ink);
+  --card: var(--game-paper);
+  --card-foreground: var(--game-ink);
+  --popover: var(--game-paper);
+  --popover-foreground: var(--game-ink);
+  --primary: var(--game-pink);
+  --primary-foreground: var(--game-cream);
+  --secondary: var(--game-cyan);
+  --secondary-foreground: var(--game-ink);
+  --muted: color-mix(in oklch, var(--game-ink) 8%, white);
+  --muted-foreground: color-mix(in oklch, var(--game-ink) 65%, transparent);
+  --accent: var(--game-cyan);
+  --accent-foreground: var(--game-ink);
+  --destructive: #e23d5e;
+  --border: var(--game-ink);
+  --input: var(--game-ink);
+  --ring: var(--game-ink);
 
-  --surface: oklch(1 0 0);
-  --surface-raised: oklch(0.99 0.005 65);
-  --surface-foreground: oklch(0.16 0.02 270);
+  --surface: var(--game-paper);
+  --surface-raised: var(--game-paper);
+  --surface-foreground: var(--game-ink);
 
-  --chart-1: oklch(0.57 0.24 268);
-  --chart-2: oklch(0.68 0.28 325);
-  --chart-3: oklch(0.69 0.24 15);
-  --chart-4: oklch(0.74 0.2 55);
-  --chart-5: oklch(0.6 0.2 180);
+  --chart-1: var(--game-pink);
+  --chart-2: var(--game-cyan);
+  --chart-3: var(--game-orange);
+  --chart-4: var(--game-canvas-yellow);
+  --chart-5: var(--game-ink-soft);
   --radius: 0.875rem;
 
-  --sidebar: oklch(0.985 0.008 65);
-  --sidebar-foreground: oklch(0.16 0.02 270);
-  --sidebar-primary: var(--brand-indigo);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.95 0.04 320);
-  --sidebar-accent-foreground: oklch(0.2 0.06 320);
-  --sidebar-border: oklch(0.9 0.02 280 / 80%);
-  --sidebar-ring: oklch(0.57 0.24 268 / 50%);
+  --sidebar: var(--game-canvas-warm);
+  --sidebar-foreground: var(--game-ink);
+  --sidebar-primary: var(--game-pink);
+  --sidebar-primary-foreground: var(--game-cream);
+  --sidebar-accent: var(--game-cyan);
+  --sidebar-accent-foreground: var(--game-ink);
+  --sidebar-border: var(--game-ink);
+  --sidebar-ring: var(--game-ink);
+}
+
+/* Landing / game-show palette — flat, saturated, chunky. Sitewide. */
+:root {
+  --game-canvas-yellow: #ffe15e;
+  --game-canvas-warm: #fff7d6;
+  --game-canvas-dark: #1e1b4d;
+  --game-ink: #1e1b4d;
+  --game-ink-soft: #3d2a7d;
+  --game-cream: #fff7d6;
+  --game-paper: #ffffff;
+  --game-pink: #ff5eb4;
+  --game-cyan: #3ddce0;
+  --game-orange: #ff8b3d;
+  /* Semantic aliases for non-shadcn usages */
+  --medal-gold: var(--game-canvas-yellow);
+  --medal-silver: var(--game-cream);
+  --medal-bronze: var(--game-orange);
+  --team-1: var(--game-pink);
+  --team-2: var(--game-cyan);
 }
 
 /* Dark mode — midnight with the same vibrant brand accents */
 .dark {
+  /* Game-layer overrides — canvas flips to deep navy; cream stays cream
+     (it's the reversed-out-text token); accents brighten for dark canvas. */
+  --game-canvas-yellow: #ffe15e;   /* landing locks color-scheme: light, doesn't apply */
+  --game-canvas-warm: #14112e;
+  --game-canvas-dark: #0b0920;
+  --game-ink: #fff7d6;
+  --game-ink-soft: #d4c8ff;
+  --game-cream: #fff7d6;
+  --game-paper: color-mix(in oklch, var(--game-ink-soft) 18%, var(--game-canvas-warm));
+  --game-pink: #ff7dc4;
+  --game-cyan: #6fe8eb;
+  --game-orange: #ffa15e;
+
+  /* Brand legacy — deleted in Task 10 */
   --brand-indigo: oklch(0.7 0.22 268);
   --brand-fuchsia: oklch(0.75 0.25 325);
   --brand-rose: oklch(0.76 0.2 15);
 
-  --background: oklch(0.13 0.03 270);
-  --foreground: oklch(0.97 0.015 280);
-  --card: oklch(0.18 0.04 270);
-  --card-foreground: oklch(0.97 0.015 280);
-  --popover: oklch(0.18 0.04 270);
-  --popover-foreground: oklch(0.97 0.015 280);
-  --primary: var(--brand-indigo);
-  --primary-foreground: oklch(0.14 0.02 270);
-  --secondary: oklch(0.24 0.04 270);
-  --secondary-foreground: oklch(0.97 0.015 280);
-  --muted: oklch(0.22 0.03 270);
-  --muted-foreground: oklch(0.7 0.03 280);
-  --accent: oklch(0.28 0.08 320);
-  --accent-foreground: oklch(0.96 0.02 320);
-  --destructive: oklch(0.7 0.19 22);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.7 0.22 268 / 60%);
+  --background: var(--game-canvas-warm);
+  --foreground: var(--game-ink);
+  --card: var(--game-paper);
+  --card-foreground: var(--game-ink);
+  --popover: var(--game-paper);
+  --popover-foreground: var(--game-ink);
+  --primary: var(--game-pink);
+  --primary-foreground: var(--game-cream);
+  --secondary: var(--game-cyan);
+  --secondary-foreground: var(--game-ink);
+  --muted: color-mix(in oklch, var(--game-ink) 12%, var(--game-canvas-warm));
+  --muted-foreground: color-mix(in oklch, var(--game-ink) 70%, transparent);
+  --accent: var(--game-cyan);
+  --accent-foreground: var(--game-ink);
+  --destructive: #ff6b87;
+  --border: var(--game-ink);
+  --input: var(--game-ink);
+  --ring: var(--game-ink);
 
-  --surface: oklch(0.2 0.04 270);
-  --surface-raised: oklch(0.24 0.05 270);
-  --surface-foreground: oklch(0.97 0.015 280);
+  --surface: var(--game-paper);
+  --surface-raised: var(--game-paper);
+  --surface-foreground: var(--game-ink);
 
-  --chart-1: oklch(0.7 0.22 268);
-  --chart-2: oklch(0.75 0.25 325);
-  --chart-3: oklch(0.76 0.2 15);
-  --chart-4: oklch(0.78 0.18 55);
-  --chart-5: oklch(0.68 0.2 180);
+  --chart-1: var(--game-pink);
+  --chart-2: var(--game-cyan);
+  --chart-3: var(--game-orange);
+  --chart-4: var(--game-canvas-yellow);
+  --chart-5: var(--game-ink-soft);
 
-  --sidebar: oklch(0.18 0.04 270);
-  --sidebar-foreground: oklch(0.97 0.015 280);
-  --sidebar-primary: var(--brand-indigo);
-  --sidebar-primary-foreground: oklch(0.14 0.02 270);
-  --sidebar-accent: oklch(0.28 0.08 320);
-  --sidebar-accent-foreground: oklch(0.96 0.02 320);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.7 0.22 268 / 60%);
+  --sidebar: var(--game-canvas-warm);
+  --sidebar-foreground: var(--game-ink);
+  --sidebar-primary: var(--game-pink);
+  --sidebar-primary-foreground: var(--game-cream);
+  --sidebar-accent: var(--game-cyan);
+  --sidebar-accent-foreground: var(--game-ink);
+  --sidebar-border: var(--game-ink);
+  --sidebar-ring: var(--game-ink);
 }
 
 @layer base {
@@ -270,5 +304,133 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .nailed-pop { animation: none; }
+  }
+
+  /* ---------------------------------------------------------------
+     Jackbox sticker-card system — sitewide grammar.
+     --------------------------------------------------------------- */
+
+  /* Canvas utilities. `page` variant force-locks light mode for the
+     yellow marketing canvas; the other two flip with the dark class. */
+  .game-canvas-page {
+    background: var(--game-canvas-yellow);
+    color: var(--game-ink);
+    color-scheme: light;
+  }
+  .game-canvas {
+    background: var(--game-canvas-warm);
+    color: var(--game-ink);
+  }
+  .game-canvas-dark {
+    background: var(--game-canvas-dark);
+    color: var(--game-cream);
+  }
+
+  /* Sticker card — flat fill, hard ink border, chunky offset shadow.
+     4px offset is what sells "stamped on paper" — don't replace with blur. */
+  .game-card {
+    border: 3px solid var(--game-ink);
+    border-radius: 14px;
+    box-shadow: 4px 4px 0 var(--game-ink);
+    transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+  }
+  .game-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--game-ink);
+  }
+  .game-card:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--game-ink);
+  }
+
+  /* Thicker picture-frame variant for the Gemini painting in-game. */
+  .game-frame {
+    border: 5px solid var(--game-ink);
+    border-radius: 16px;
+    box-shadow: 6px 6px 0 var(--game-ink);
+  }
+
+  /* Hero headline — solid ink with a colored highlight block around a
+     single word. Example:
+       <h1 class="game-hero">Guess the <span class="game-hero-mark">prompt.</span></h1> */
+  .game-hero {
+    font-family: var(--font-display), sans-serif;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+    color: var(--game-ink);
+  }
+  .game-hero-mark {
+    display: inline-block;
+    background: var(--game-pink);
+    color: var(--game-cream);
+    padding: 0 0.3em;
+    border: 3px solid var(--game-ink);
+    border-radius: 12px;
+    transform: rotate(-1.5deg);
+    box-shadow: 3px 3px 0 var(--game-ink);
+  }
+
+  /* Tilted pill. Override tilt inline via style={{ "--sticker-tilt": "10deg" }} */
+  .sticker {
+    --sticker-tilt: -2deg;
+    display: inline-block;
+    padding: 5px 14px;
+    border: 2px solid var(--game-ink);
+    border-radius: 999px;
+    background: var(--game-paper);
+    color: var(--game-ink);
+    font-weight: 700;
+    font-size: 12px;
+    transform: rotate(var(--sticker-tilt));
+  }
+
+  /* Dark pill — round / timer / live-count indicators. */
+  .marquee-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    background: var(--game-ink);
+    color: var(--game-canvas-yellow);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    border: 2px solid var(--game-ink);
+  }
+
+  /* Pulsing dot for presence callouts. */
+  .live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--game-cyan);
+    animation: live-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes live-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.55; transform: scale(0.75); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot { animation: none; }
+  }
+
+  /* Avatar chip — replaces hardcoded text-white/text-black spots across
+     the codebase. Override fill via style={{ "--chip-color": "#ff5eb4" }}. */
+  .player-chip {
+    --chip-color: var(--game-pink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--chip-color);
+    color: var(--game-ink);
+    border: 2px solid var(--game-ink);
+    box-shadow: 2px 2px 0 var(--game-ink);
+    font-family: var(--font-heading);
+    font-weight: 900;
   }
 }
