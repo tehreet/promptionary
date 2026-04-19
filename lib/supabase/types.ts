@@ -259,8 +259,8 @@ export type Database = {
           p_mode?: Database["public"]["Enums"]["room_mode"]
         }
         Returns: {
-          code: string
-          room_id: string
+          new_code: string
+          new_room_id: string
         }[]
       }
       generate_room_code: { Args: never; Returns: string }

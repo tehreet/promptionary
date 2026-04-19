@@ -97,7 +97,24 @@ export function LobbyClient({
       )
       .subscribe();
 
+    // Poll every 2s as a fallback in case the Postgres Changes stream lags or
+    // drops events. Cheap and bounded (one small query).
+    const poll = setInterval(async () => {
+      const { data } = await supabase
+        .from("room_players")
+        .select("player_id, display_name, is_host, score")
+        .eq("room_id", room.id);
+      if (data) setPlayers(data as Player[]);
+      const { data: r } = await supabase
+        .from("rooms")
+        .select("phase")
+        .eq("id", room.id)
+        .maybeSingle();
+      if (r?.phase) setPhase(r.phase);
+    }, 2000);
+
     return () => {
+      clearInterval(poll);
       supabase.removeChannel(playersChannel);
       supabase.removeChannel(roomChannel);
     };

@@ -145,7 +145,41 @@ export function GameClient({
         },
       )
       .subscribe();
+    // Poll as fallback in case the postgres_changes stream drops events.
+    const poll = setInterval(async () => {
+      const { data: r } = await supabase
+        .from("rooms")
+        .select(
+          "id, code, phase, host_id, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
+        )
+        .eq("id", room.id)
+        .maybeSingle();
+      if (r) setRoom((prev) => ({ ...prev, ...(r as Room) }));
+
+      const { data: ps } = await supabase
+        .from("room_players")
+        .select("player_id, display_name, is_host, score")
+        .eq("room_id", room.id);
+      if (ps) setPlayers(ps as Player[]);
+
+      if (currentRound?.id) {
+        const { data: rd } = await supabase
+          .from("rounds_public")
+          .select("id, round_num, prompt, image_url, ended_at")
+          .eq("id", currentRound.id)
+          .maybeSingle();
+        if (rd) setCurrentRound((prev) => ({ ...(prev ?? rd), ...rd } as Round));
+
+        const { count } = await supabase
+          .from("guesses")
+          .select("*", { count: "exact", head: true })
+          .eq("round_id", currentRound.id);
+        if (typeof count === "number") setSubmissionCount(count);
+      }
+    }, 2000);
+
     return () => {
+      clearInterval(poll);
       supabase.removeChannel(ch);
     };
   }, [room.id, room.round_num, currentRound]);

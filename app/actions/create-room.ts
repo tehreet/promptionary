@@ -17,5 +17,5 @@ export async function createRoomAction(formData: FormData) {
   const row = data?.[0];
   if (!row) throw new Error("create_room returned no row");
 
-  redirect(`/play/${row.code}`);
+  redirect(`/play/${row.new_code}`);
 }
