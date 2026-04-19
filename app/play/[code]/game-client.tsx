@@ -16,6 +16,7 @@ import {
   playImageLand,
   playReveal,
   playSubmit,
+  playTick,
   playWinnerCheer,
 } from "@/lib/sfx";
 import { PromptFlipboard, type PromptToken } from "@/components/prompt-flipboard";
@@ -528,6 +529,24 @@ function GameClientInner({
     playImageLand();
   }, [currentRound?.id, currentRound?.image_url, room.phase]);
 
+  // Clock tick sfx in the last 5 seconds of guessing. Fires once per whole
+  // second so re-renders inside the same second don't double-play. Ref keyed
+  // off the round id so a new round starts from a clean slate.
+  const lastTickSecondRef = useRef<{ roundId: string; second: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (room.phase !== "guessing") return;
+    if (!currentRound?.id) return;
+    if (remaining <= 0 || remaining > 5) return;
+    const ref = lastTickSecondRef.current;
+    if (ref && ref.roundId === currentRound.id && ref.second === remaining) {
+      return;
+    }
+    lastTickSecondRef.current = { roundId: currentRound.id, second: remaining };
+    playTick();
+  }, [room.phase, remaining, currentRound?.id]);
+
   const submitGuess = useCallback(async () => {
     if (!currentRound?.id) return;
     const text = myGuess.trim();
@@ -777,7 +796,12 @@ function GameClientInner({
             <p className="text-lg font-semibold opacity-90">
               Submissions: {submissionCount}/{submissionTotal}
             </p>
-            <span className="marquee-pill">
+            <span
+              className={`marquee-pill${
+                remaining > 0 && remaining <= 5 ? " marquee-pill--urgent" : ""
+              }`}
+              data-urgent={remaining > 0 && remaining <= 5 ? "1" : undefined}
+            >
               <span className="live-dot" aria-hidden />
               {remaining}s
             </span>
