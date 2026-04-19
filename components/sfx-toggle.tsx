@@ -28,7 +28,7 @@ export function SfxToggle({ className = "" }: { className?: string }) {
           ["--sticker-tilt"]: "0deg",
           ...(displayMuted
             ? {
-                background: "var(--game-ink)",
+                background: "var(--game-canvas-dark)",
                 color: "var(--game-canvas-yellow)",
               }
             : {}),
