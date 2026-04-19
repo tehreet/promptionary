@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabaseAuthBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +29,7 @@ export function SignInCard({
   async function oauth(provider: "google" | "discord") {
     setBusy(provider);
     setError(null);
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseAuthBrowserClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -63,7 +63,7 @@ export function SignInCard({
     if (!trimmed) return;
     setBusy("email");
     setError(null);
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseAuthBrowserClient();
     const { error: err } = await supabase.auth.signInWithOtp({
       email: trimmed,
       options: { emailRedirectTo: redirectTo() },

@@ -30,6 +30,7 @@ export function ChatPanel({
   const [posting, setPosting] = useState(false);
   const [collapsed, setCollapsed] = useState(variant === "floating");
   const [unread, setUnread] = useState(0);
+  const [sendError, setSendError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const locked =
@@ -101,14 +102,19 @@ export function ChatPanel({
     const text = draft.trim();
     if (!text || locked) return;
     setPosting(true);
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.rpc("post_message", {
-      p_room_id: roomId,
-      p_content: text,
-    });
-    if (!error) {
+    setSendError(null);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.rpc("post_message", {
+        p_room_id: roomId,
+        p_content: text,
+      });
+      if (error) {
+        console.error("[chat] post_message error", error);
+        setSendError(error.message);
+        return;
+      }
       setDraft("");
-      // Re-fetch the latest row and broadcast it for everyone else.
       const { data: latest } = await supabase
         .from("room_messages")
         .select("*")
@@ -116,22 +122,26 @@ export function ChatPanel({
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (latest && channel) {
-        channel.send({
-          type: "broadcast",
-          event: "chat",
-          payload: latest,
-        });
-        // Include self (we set broadcast.self=false on the channel config).
+      if (latest) {
+        if (channel) {
+          channel.send({
+            type: "broadcast",
+            event: "chat",
+            payload: latest,
+          });
+        }
         setMessages((prev) => {
           if (prev.some((m) => m.id === (latest as ChatMessage).id)) return prev;
           return [...prev, latest as ChatMessage];
         });
       }
-    } else {
-      alert(error.message);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[chat] send threw", err);
+      setSendError(msg);
+    } finally {
+      setPosting(false);
     }
-    setPosting(false);
   }
 
   const box = (
@@ -183,6 +193,14 @@ export function ChatPanel({
           Send
         </Button>
       </form>
+      {sendError && (
+        <div
+          data-chat-error="1"
+          className="text-[11px] bg-red-500/20 border-t border-red-500/30 px-3 py-1.5"
+        >
+          {sendError}
+        </div>
+      )}
     </div>
   );
 

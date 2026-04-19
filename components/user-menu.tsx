@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabaseAuthBrowserClient } from "@/lib/supabase/client";
 import { signOutAction } from "@/app/actions/sign-out";
 
 type Profile = { display_name: string; avatar_url: string | null };
@@ -27,7 +27,7 @@ export function UserMenu({
 
   useEffect(() => {
     let cancelled = false;
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseAuthBrowserClient();
 
     async function load() {
       const {
