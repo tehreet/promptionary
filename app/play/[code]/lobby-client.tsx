@@ -432,7 +432,13 @@ function LobbyClientInner({
                       <button
                         type="button"
                         onClick={() => handleSwapTeam(p.player_id, null)}
-                        className="text-[10px] font-bold rounded-full px-2 py-0.5 border-2 border-[var(--game-ink)] bg-[var(--game-canvas-yellow)]"
+                        className="sticker text-[10px]"
+                        style={
+                          {
+                            ["--sticker-tilt" as string]: "0deg",
+                            background: "var(--game-canvas-yellow)",
+                          } as React.CSSProperties
+                        }
                       >
                         Assign
                       </button>

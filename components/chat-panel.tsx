@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRoomChannel } from "@/lib/room-channel";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { colorForPlayer } from "@/lib/player";
 
 type ChatMessage = {
@@ -185,14 +186,14 @@ export function ChatPanel({
         </div>
       ) : (
         <form onSubmit={send} className="mt-2 flex gap-2">
-          <input
+          <Input
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Say something…"
             maxLength={400}
             disabled={posting}
-            className="flex-1 bg-[var(--game-paper)] text-[var(--game-ink)] border-2 border-[var(--game-ink)] rounded-xl px-3 py-1.5 text-sm disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--game-ink)]"
+            className="flex-1"
           />
           <Button
             type="submit"

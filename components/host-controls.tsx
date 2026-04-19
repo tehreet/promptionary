@@ -51,8 +51,9 @@ export function HostControls({
           disabled={busy}
           aria-label={`Make ${victimName} host`}
           title="Make host"
-          className="game-card w-8 h-8 flex items-center justify-center rounded-full text-sm disabled:opacity-50"
+          className="game-card w-8 h-8 flex items-center justify-center text-sm disabled:opacity-50"
           style={{
+            borderRadius: "9999px",
             background: "var(--game-canvas-yellow)",
             color: "var(--game-ink)",
           }}
@@ -67,8 +68,9 @@ export function HostControls({
           disabled={busy}
           aria-label={`Kick ${victimName}`}
           title="Kick player"
-          className="game-card w-8 h-8 flex items-center justify-center rounded-full text-sm disabled:opacity-50"
+          className="game-card w-8 h-8 flex items-center justify-center text-sm disabled:opacity-50"
           style={{
+            borderRadius: "9999px",
             background: "var(--destructive)",
             color: "var(--destructive-foreground, var(--game-cream))",
           }}
