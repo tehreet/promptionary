@@ -21,6 +21,10 @@ import {
 import { PromptFlipboard, type PromptToken } from "@/components/prompt-flipboard";
 import { HostControls } from "@/components/host-controls";
 import { LoadingPhrases } from "@/components/loading-phrases";
+import {
+  RoundHighlightsCarousel,
+  type RoundHighlight,
+} from "@/components/round-highlights-carousel";
 
 type Room = {
   id: string;
@@ -147,6 +151,7 @@ function GameClientInner({
   const [guessSubmitted, setGuessSubmitted] = useState<boolean>(false);
   const [guessesFromReveal, setGuessesFromReveal] = useState<Guess[]>([]);
   const [promptTokens, setPromptTokens] = useState<PromptToken[]>([]);
+  const [highlights, setHighlights] = useState<RoundHighlight[]>([]);
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const isHost = room.host_id === currentPlayerId;
 
@@ -463,6 +468,89 @@ function GameClientInner({
       if (tokens) setPromptTokens(tokens as PromptToken[]);
     })();
   }, [room.phase, currentRound?.id]);
+
+  // Fetch every round's prompt, image, tokens, and top guess when the game
+  // ends, for the highlights carousel above the final leaderboard.
+  useEffect(() => {
+    if (room.phase !== "game_over") return;
+    let cancel = false;
+    (async () => {
+      const supabase = supabaseRef.current;
+      const { data: rounds } = await supabase
+        .from("rounds_public")
+        .select("id, round_num, prompt, image_url, artist_player_id")
+        .eq("room_id", room.id)
+        .order("round_num", { ascending: true });
+      if (cancel || !rounds || rounds.length === 0) return;
+
+      const roundIds = rounds.map((r) => r.id).filter((x): x is string => !!x);
+      if (roundIds.length === 0) return;
+
+      const [{ data: tokens }, { data: guesses }] = await Promise.all([
+        supabase
+          .from("round_prompt_tokens")
+          .select("round_id, position, token, role")
+          .in("round_id", roundIds),
+        supabase
+          .from("guesses")
+          .select("id, round_id, player_id, guess, total_score")
+          .in("round_id", roundIds)
+          .order("total_score", { ascending: false }),
+      ]);
+      if (cancel) return;
+
+      const tokensByRound = new Map<string, PromptToken[]>();
+      for (const t of (tokens ?? []) as Array<{
+        round_id: string;
+        position: number;
+        token: string;
+        role: PromptToken["role"];
+      }>) {
+        const arr = tokensByRound.get(t.round_id) ?? [];
+        arr.push({ position: t.position, token: t.token, role: t.role });
+        tokensByRound.set(t.round_id, arr);
+      }
+
+      const topByRound = new Map<
+        string,
+        { id: string; player_id: string; guess: string; total_score: number }
+      >();
+      for (const g of (guesses ?? []) as Array<{
+        id: string;
+        round_id: string;
+        player_id: string;
+        guess: string;
+        total_score: number;
+      }>) {
+        // guesses are pre-sorted desc by total_score; first write per round
+        // is the top guess.
+        if (!topByRound.has(g.round_id)) {
+          topByRound.set(g.round_id, {
+            id: g.id,
+            player_id: g.player_id,
+            guess: g.guess,
+            total_score: g.total_score,
+          });
+        }
+      }
+
+      const built: RoundHighlight[] = rounds
+        .filter((r) => r.id)
+        .map((r) => ({
+          round_id: r.id!,
+          round_num: r.round_num ?? 0,
+          prompt: r.prompt ?? null,
+          image_url: r.image_url ?? null,
+          artist_player_id: r.artist_player_id ?? null,
+          tokens: tokensByRound.get(r.id!) ?? [],
+          top_guess: topByRound.get(r.id!) ?? null,
+        }));
+      setHighlights(built);
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [room.phase, room.id]);
 
   // Confetti + sfx on reveal (modest) + game_over (big winner blast)
   const revealFiredRef = useRef<string | null>(null);
@@ -849,13 +937,11 @@ function GameClientInner({
         </div>
       )}
 
-      {(room.phase === "reveal" || room.phase === "game_over") && (
+      {room.phase === "reveal" && (
         <section className="w-full max-w-2xl flex flex-col items-center gap-5">
-          {room.phase === "reveal" && (
-            <p className="text-sm opacity-80">
-              Next round in <span className="font-mono font-black">{remaining}s</span>
-            </p>
-          )}
+          <p className="text-sm opacity-80">
+            Next round in <span className="font-mono font-black">{remaining}s</span>
+          </p>
           <ReactionsBarWrapper />
 
           {currentRound?.image_url && (
@@ -884,104 +970,116 @@ function GameClientInner({
               />
             ))}
           </ul>
+        </section>
+      )}
 
-          {room.phase === "game_over" && (
-            <>
-              {isTeams ? (
-                <div
-                  data-team-final="1"
-                  className="w-full space-y-4 mt-4"
-                >
-                  <p className="text-center text-xs uppercase tracking-widest opacity-70">
-                    Final team leaderboard
-                  </p>
-                  <ul className="space-y-3">
-                    {teamLeaderboard.map((t, i) => (
-                      <li
-                        key={t.team}
-                        data-team-rank={i + 1}
-                        className="game-card bg-[var(--game-paper)] p-4 relative overflow-hidden"
-                        style={{
-                          transform: i === 0 ? "rotate(2deg)" : undefined,
-                        }}
-                      >
-                        <span
-                          aria-hidden
-                          className="absolute left-0 top-0 bottom-0 w-1"
-                          style={{ background: TEAM_META[t.team].color }}
-                        />
-                        <div className="flex items-baseline justify-between gap-3 pl-2">
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-sm font-black opacity-60">
-                              #{i + 1}
-                            </span>
-                            <span
-                              className="font-heading font-black text-xl"
-                              style={{ color: TEAM_META[t.team].color }}
-                            >
-                              {TEAM_META[t.team].label}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-mono font-black text-3xl text-[var(--game-ink)]">
-                              {t.avg}
-                            </p>
-                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                              avg / member
-                            </p>
-                          </div>
-                        </div>
-                        <ul className="mt-3 flex flex-wrap gap-2 pl-2">
-                          {t.members
-                            .slice()
-                            .sort((a, b) => b.score - a.score)
-                            .map((m) => (
-                              <li
-                                key={m.player_id}
-                                className="rounded-full bg-[var(--game-paper)] border-2 border-[var(--game-ink)] px-3 py-1 text-xs flex items-center gap-2 text-[var(--game-ink)]"
-                              >
-                                <span
-                                  className="player-chip h-5 w-5 text-[10px]"
-                                  style={{
-                                    ["--chip-color" as string]: colorForPlayer(
-                                      m.player_id,
-                                    ),
-                                  } as React.CSSProperties}
-                                >
-                                  {m.display_name[0]?.toUpperCase()}
-                                </span>
-                                <span className="font-semibold">
-                                  {m.display_name}
-                                </span>
-                                <span className="font-mono font-black">
-                                  {m.score}
-                                </span>
-                              </li>
-                            ))}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <div className="w-full mt-4 space-y-3">
-                  <p className="text-center text-xs uppercase tracking-widest opacity-70">
-                    Final leaderboard
-                  </p>
-                  <ul className="space-y-3">
-                    {leaderboard.map((p, i) => (
-                      <LeaderboardRow
-                        key={p.player_id}
-                        rank={i + 1}
-                        player={p}
+      {room.phase === "game_over" && (
+        <section className="w-full max-w-5xl flex flex-col items-center gap-6">
+          <ReactionsBarWrapper />
+
+          <RoundHighlightsCarousel
+            highlights={highlights}
+            players={players.map((p) => ({
+              player_id: p.player_id,
+              display_name: p.display_name,
+            }))}
+          />
+
+          <div className="w-full max-w-2xl flex flex-col items-center gap-5">
+            {isTeams ? (
+              <div
+                data-team-final="1"
+                className="w-full space-y-4 mt-4"
+              >
+                <p className="text-center text-xs uppercase tracking-widest opacity-70">
+                  Final team leaderboard
+                </p>
+                <ul className="space-y-3">
+                  {teamLeaderboard.map((t, i) => (
+                    <li
+                      key={t.team}
+                      data-team-rank={i + 1}
+                      className="game-card bg-[var(--game-paper)] p-4 relative overflow-hidden"
+                      style={{
+                        transform: i === 0 ? "rotate(2deg)" : undefined,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="absolute left-0 top-0 bottom-0 w-1"
+                        style={{ background: TEAM_META[t.team].color }}
                       />
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <PlayAgainControls room={room} isHost={isHost} />
-            </>
-          )}
+                      <div className="flex items-baseline justify-between gap-3 pl-2">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-black opacity-60">
+                            #{i + 1}
+                          </span>
+                          <span
+                            className="font-heading font-black text-xl"
+                            style={{ color: TEAM_META[t.team].color }}
+                          >
+                            {TEAM_META[t.team].label}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono font-black text-3xl text-[var(--game-ink)]">
+                            {t.avg}
+                          </p>
+                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                            avg / member
+                          </p>
+                        </div>
+                      </div>
+                      <ul className="mt-3 flex flex-wrap gap-2 pl-2">
+                        {t.members
+                          .slice()
+                          .sort((a, b) => b.score - a.score)
+                          .map((m) => (
+                            <li
+                              key={m.player_id}
+                              className="rounded-full bg-[var(--game-paper)] border-2 border-[var(--game-ink)] px-3 py-1 text-xs flex items-center gap-2 text-[var(--game-ink)]"
+                            >
+                              <span
+                                className="player-chip h-5 w-5 text-[10px]"
+                                style={{
+                                  ["--chip-color" as string]: colorForPlayer(
+                                    m.player_id,
+                                  ),
+                                } as React.CSSProperties}
+                              >
+                                {m.display_name[0]?.toUpperCase()}
+                              </span>
+                              <span className="font-semibold">
+                                {m.display_name}
+                              </span>
+                              <span className="font-mono font-black">
+                                {m.score}
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="w-full mt-4 space-y-3">
+                <p className="text-center text-xs uppercase tracking-widest opacity-70">
+                  Final leaderboard
+                </p>
+                <ul className="space-y-3">
+                  {leaderboard.map((p, i) => (
+                    <LeaderboardRow
+                      key={p.player_id}
+                      rank={i + 1}
+                      player={p}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+            <PlayAgainControls room={room} isHost={isHost} />
+          </div>
         </section>
       )}
       <ChatPanel
