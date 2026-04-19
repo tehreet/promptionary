@@ -18,7 +18,21 @@ export function JoinRoomCard({
   return (
     <Card
       className="w-full max-w-sm game-card md:rotate-1 p-0 border-none"
-      style={{ background: "var(--game-cyan)", color: "var(--game-ink)" }}
+      style={
+        {
+          background: "var(--game-cyan)",
+          color: "#1e1b4d",
+          // Lock internal palette to light values so dark mode doesn't
+          // invert the text inside this always-cyan sticker card.
+          ["--game-ink" as string]: "#1e1b4d",
+          ["--game-cream" as string]: "#fff7d6",
+          ["--game-paper" as string]: "#ffffff",
+          ["--game-canvas-yellow" as string]: "#ffe15e",
+          ["--foreground" as string]: "#1e1b4d",
+          ["--muted-foreground" as string]:
+            "color-mix(in oklch, #1e1b4d 65%, transparent)",
+        } as React.CSSProperties
+      }
     >
       <CardHeader>
         <CardTitle className="text-2xl font-heading font-black">
