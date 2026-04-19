@@ -9,6 +9,7 @@ import { leaveRoomAction } from "@/app/actions/leave-room";
 import { InviteCard } from "./invite-card";
 import { RoomChannelProvider } from "@/lib/room-channel";
 import { ChatPanel } from "@/components/chat-panel";
+import { HostControls } from "@/components/host-controls";
 
 type Room = {
   id: string;
@@ -62,13 +63,21 @@ function LobbyClientInner({
   const router = useRouter();
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const [phase, setPhase] = useState(room.phase);
+  const [hostId, setHostId] = useState(room.host_id);
   const [isPending, startTransition] = useTransition();
   const [starting, setStarting] = useState(false);
-  const isHost = room.host_id === currentPlayerId;
+  const isHost = hostId === currentPlayerId;
 
   useEffect(() => {
     if (phase !== "lobby") router.refresh();
   }, [phase, router]);
+
+  // If I get kicked, bounce me back to the home page.
+  useEffect(() => {
+    if (players.length === 0) return;
+    const stillHere = players.some((p) => p.player_id === currentPlayerId);
+    if (!stillHere) router.replace("/");
+  }, [players, currentPlayerId, router]);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -113,8 +122,9 @@ function LobbyClientInner({
           filter: `id=eq.${room.id}`,
         },
         (payload) => {
-          const next = payload.new as { phase: string };
+          const next = payload.new as { phase: string; host_id: string };
           setPhase(next.phase);
+          if (next.host_id) setHostId(next.host_id);
         },
       )
       .subscribe();
@@ -130,10 +140,11 @@ function LobbyClientInner({
       if (data) setPlayers(data as Player[]);
       const { data: r } = await supabase
         .from("rooms")
-        .select("phase")
+        .select("phase, host_id")
         .eq("id", room.id)
         .maybeSingle();
       if (r?.phase) setPhase(r.phase);
+      if (r?.host_id) setHostId(r.host_id);
     }, 2000);
 
     return () => {
@@ -191,6 +202,13 @@ function LobbyClientInner({
                 <span className="ml-auto text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5">
                   host
                 </span>
+              )}
+              {isHost && p.player_id !== currentPlayerId && (
+                <HostControls
+                  roomId={room.id}
+                  victimId={p.player_id}
+                  victimName={p.display_name}
+                />
               )}
             </li>
           ))}

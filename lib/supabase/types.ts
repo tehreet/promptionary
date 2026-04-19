@@ -320,6 +320,10 @@ export type Database = {
         }
         Returns: string
       }
+      kick_player: {
+        Args: { p_room_id: string; p_victim_id: string }
+        Returns: undefined
+      }
       leave_room: { Args: { p_room_id: string }; Returns: undefined }
       play_again: {
         Args: {
@@ -343,6 +347,10 @@ export type Database = {
       submit_guess: {
         Args: { p_guess: string; p_round_id: string }
         Returns: string
+      }
+      transfer_host: {
+        Args: { p_new_host_id: string; p_room_id: string }
+        Returns: undefined
       }
     }
     Enums: {

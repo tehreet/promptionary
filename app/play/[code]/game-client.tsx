@@ -19,6 +19,7 @@ import {
   playWinnerCheer,
 } from "@/lib/sfx";
 import { PromptFlipboard, type PromptToken } from "@/components/prompt-flipboard";
+import { HostControls } from "@/components/host-controls";
 
 type Room = {
   id: string;
@@ -125,6 +126,13 @@ function GameClientInner({
   useEffect(() => {
     if (room.phase === "lobby") router.refresh();
   }, [room.phase, router]);
+
+  // If I get kicked mid-game, bounce me home.
+  useEffect(() => {
+    if (players.length === 0) return;
+    const stillHere = players.some((p) => p.player_id === currentPlayerId);
+    if (!stillHere) router.replace("/");
+  }, [players, currentPlayerId, router]);
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
   const [myGuess, setMyGuess] = useState<string>("");
   const [guessSubmitted, setGuessSubmitted] = useState<boolean>(false);
@@ -582,7 +590,7 @@ function GameClientInner({
             {leaderboard.map((p, i) => (
               <li
                 key={p.player_id}
-                className="flex items-center gap-2 rounded-full bg-muted text-foreground px-3 py-1"
+                className="flex items-center gap-2 rounded-full bg-muted text-foreground pl-3 pr-2 py-1"
               >
                 <span className="text-xs opacity-60 font-black w-4 text-right">
                   {i + 1}
@@ -597,6 +605,13 @@ function GameClientInner({
                   {p.display_name}
                 </span>
                 <span className="font-black font-mono">{p.score}</span>
+                {isHost && p.player_id !== currentPlayerId && (
+                  <HostControls
+                    roomId={room.id}
+                    victimId={p.player_id}
+                    victimName={p.display_name}
+                  />
+                )}
               </li>
             ))}
           </ul>
