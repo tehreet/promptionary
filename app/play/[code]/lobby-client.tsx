@@ -347,12 +347,21 @@ function LobbyClientInner({
                   </p>
                 )}
                 <ul className="space-y-3">
-                  {teamPlayers(t).map((p, i) => (
+                  {teamPlayers(t).map((p, i) => {
+                    const isMe = p.player_id === currentPlayerId;
+                    const highlight = isMe
+                      ? "var(--game-pink)"
+                      : p.is_host
+                      ? "var(--game-canvas-yellow)"
+                      : null;
+                    return (
                     <li
                       key={p.player_id}
                       className="game-card flex items-center gap-3 px-3 py-2 bg-[var(--game-paper)]"
                       style={{
                         transform: `rotate(${i % 2 === 0 ? -0.8 : 0.8}deg)`,
+                        outline: highlight ? `4px solid ${highlight}` : undefined,
+                        outlineOffset: highlight ? "2px" : undefined,
                       }}
                     >
                       <span
@@ -373,20 +382,6 @@ function LobbyClientInner({
                       >
                         {p.display_name}
                       </span>
-                      {p.player_id === currentPlayerId && (
-                        <span
-                          className="sticker text-[10px] font-black uppercase tracking-wider"
-                          style={
-                            {
-                              ["--sticker-tilt" as string]: "-3deg",
-                              background: "var(--game-pink)",
-                              color: "var(--game-cream)",
-                            } as React.CSSProperties
-                          }
-                        >
-                          you
-                        </span>
-                      )}
                       {p.is_host && (
                         <span
                           className="sticker text-[11px] font-black uppercase tracking-wider"
@@ -421,7 +416,8 @@ function LobbyClientInner({
                         />
                       )}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
             ))}
@@ -471,17 +467,26 @@ function LobbyClientInner({
           <h2 className="text-lg font-heading font-black text-[var(--game-ink)]/80">
             Players ({players.length})
           </h2>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {players.map((p, i) => (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {players.map((p, i) => {
+              const isMe = p.player_id === currentPlayerId;
+              const highlight = isMe
+                ? "var(--game-pink)"
+                : p.is_host
+                ? "var(--game-canvas-yellow)"
+                : null;
+              return (
               <li
                 key={p.player_id}
                 className="game-card flex items-center gap-3 px-4 py-3 bg-[var(--game-paper)]"
                 style={{
                   transform: `rotate(${i % 2 === 0 ? -0.8 : 0.8}deg)`,
+                  outline: highlight ? `4px solid ${highlight}` : undefined,
+                  outlineOffset: highlight ? "2px" : undefined,
                 }}
               >
                 <span
-                  className="player-chip w-10 h-10 text-sm"
+                  className="player-chip w-10 h-10 text-sm shrink-0"
                   style={
                     {
                       ["--chip-color" as string]: colorForPlayer(p.player_id),
@@ -496,23 +501,9 @@ function LobbyClientInner({
                 >
                   {p.display_name}
                 </span>
-                {p.player_id === currentPlayerId && (
-                  <span
-                    className="sticker text-[10px] font-black uppercase tracking-wider"
-                    style={
-                      {
-                        ["--sticker-tilt" as string]: "-3deg",
-                        background: "var(--game-pink)",
-                        color: "var(--game-cream)",
-                      } as React.CSSProperties
-                    }
-                  >
-                    you
-                  </span>
-                )}
                 {p.is_host && (
                   <span
-                    className="sticker text-[11px] font-black uppercase tracking-wider"
+                    className="sticker text-[11px] font-black uppercase tracking-wider shrink-0"
                     style={
                       {
                         ["--sticker-tilt" as string]: "3deg",
@@ -531,7 +522,8 @@ function LobbyClientInner({
                   />
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       )}
