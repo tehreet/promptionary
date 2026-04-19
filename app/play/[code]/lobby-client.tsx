@@ -539,7 +539,7 @@ function LobbyClientInner({
               })
             }
             disabled={isPending}
-            variant="outline"
+            variant="destructive"
             className="h-12 px-6"
           >
             Leave
