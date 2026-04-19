@@ -79,12 +79,10 @@ test("public profile: seeded handle renders stats card", async () => {
   `);
 
   try {
-    const api = await pwRequest.newContext();
-    const page = await api.newContext();
-    void page;
-    // Easier: use a fresh Playwright page.
     const browserApi = await pwRequest.newContext({
-      baseURL: process.env.PROMPTIONARY_TEST_URL ?? "https://promptionary-three.vercel.app",
+      baseURL:
+        process.env.PROMPTIONARY_TEST_URL ??
+        "https://promptionary-three.vercel.app",
     });
     const res = await browserApi.get(`/u/${handle}`);
     expect(res.status()).toBe(200);
