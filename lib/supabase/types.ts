@@ -360,6 +360,47 @@ export type Database = {
           },
         ]
       }
+      room_reactions: {
+        Row: {
+          color: string
+          created_at: string
+          emoji: string
+          id: string
+          player_id: string
+          room_id: string
+          x: number
+          y: number
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          emoji: string
+          id?: string
+          player_id: string
+          room_id: string
+          x: number
+          y: number
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          emoji?: string
+          id?: string
+          player_id?: string
+          room_id?: string
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_reactions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms: {
         Row: {
           code: string
@@ -589,6 +630,16 @@ export type Database = {
       }
       post_message: {
         Args: { p_content: string; p_room_id: string; p_team?: number }
+        Returns: string
+      }
+      post_reaction: {
+        Args: {
+          p_color: string
+          p_emoji: string
+          p_room_id: string
+          p_x: number
+          p_y: number
+        }
         Returns: string
       }
       promote_anon_for_passkey: {
