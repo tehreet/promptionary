@@ -7,10 +7,21 @@ import { signOutAction } from "@/app/actions/sign-out";
 
 type Profile = { display_name: string; avatar_url: string | null };
 
-export function UserMenu({ className = "" }: { className?: string }) {
-  const [loaded, setLoaded] = useState(false);
-  const [isAnon, setIsAnon] = useState(true);
-  const [profile, setProfile] = useState<Profile | null>(null);
+export function UserMenu({
+  className = "",
+  initialIsAnon = true,
+  initialProfile = null,
+}: {
+  className?: string;
+  initialIsAnon?: boolean;
+  initialProfile?: Profile | null;
+}) {
+  // Server passes the auth state down so first paint is correct after a
+  // magic-link / OAuth redirect. Client useEffect still runs so sign-ins
+  // and sign-outs in-session stay reactive.
+  const [loaded, setLoaded] = useState(!initialIsAnon);
+  const [isAnon, setIsAnon] = useState(initialIsAnon);
+  const [profile, setProfile] = useState<Profile | null>(initialProfile);
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 

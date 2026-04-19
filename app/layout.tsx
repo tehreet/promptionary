@@ -4,6 +4,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SfxToggle } from "@/components/sfx-toggle";
 import { UserMenu } from "@/components/user-menu";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/profile";
 import "./globals.css";
 
 const geist = Geist({
@@ -52,11 +54,27 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Touching cookies here makes the whole layout dynamic (per-request),
+  // which is necessary for UserMenu to render the right state on the first
+  // paint after a magic-link / OAuth redirect. Otherwise Next would serve
+  // a static copy that still shows "Sign in".
+  const supabase = await createSupabaseServerClient();
+  const profile = await getCurrentProfile(supabase);
+  const initialAuth = profile
+    ? {
+        isAnon: false as const,
+        profile: {
+          display_name: profile.display_name,
+          avatar_url: profile.avatar_url,
+        },
+      }
+    : { isAnon: true as const, profile: null };
+
   return (
     <html
       lang="en"
@@ -68,7 +86,10 @@ export default function RootLayout({
           <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
             <SfxToggle />
             <ThemeToggle />
-            <UserMenu />
+            <UserMenu
+              initialIsAnon={initialAuth.isAnon}
+              initialProfile={initialAuth.profile}
+            />
           </div>
           {children}
         </ThemeProvider>
