@@ -3,7 +3,7 @@ import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
-import { generateImagePng, tagPromptRoles } from "@/lib/gemini";
+import { generateImagePng, moderatePrompt, tagPromptRoles } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -108,6 +108,36 @@ export async function POST(req: Request) {
     return errJson(
       { error: "room_not_found", detail: "we couldn't find the room" },
       404,
+    );
+  }
+
+  // Lightweight moderation pass on user-written artist prompts. Party-mode
+  // prompts come from Gemini so they're safe by construction — this is only
+  // the artist's typed text. Fail open on any moderation error so a flaky
+  // classifier can't take gameplay hostage.
+  try {
+    const verdict = await moderatePrompt(round.prompt);
+    if (!verdict.safe) {
+      // Drop back to prompting so the artist can rewrite with a roomy timer.
+      await svc
+        .from("rooms")
+        .update({
+          phase: "prompting",
+          phase_ends_at: new Date(Date.now() + 60_000).toISOString(),
+        })
+        .eq("id", round.room_id);
+      return errJson(
+        {
+          error: "prompt rejected",
+          detail: verdict.reason ?? "Let's try a different prompt",
+        },
+        400,
+      );
+    }
+  } catch (e) {
+    console.warn(
+      "[submit-artist-prompt] moderation check failed, proceeding as safe",
+      e instanceof Error ? e.message : String(e),
     );
   }
 
