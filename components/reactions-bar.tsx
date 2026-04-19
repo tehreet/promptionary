@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRoomChannel } from "@/lib/room-channel";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Reaction = {
-  id: number;
+  // Stable key across broadcast / DB fetch / local spawn. Server rows reuse
+  // their DB uuid; locally-spawned (pre-persist) ones use `local:<n>`.
+  id: string;
   emoji: string;
   x: number;
   y: number;
@@ -13,17 +16,25 @@ type Reaction = {
 
 const REACTIONS = ["🔥", "💀", "🤌", "👏", "😂", "🧠"] as const;
 
-let nextId = 1;
+// How far back to pull persisted reactions when a tab mounts. The animation
+// itself runs ~1800ms, so 10s is plenty of runway for late joiners /
+// refreshes / reconnects to see whatever just happened.
+const CATCHUP_WINDOW_SECONDS = 10;
+
+let nextLocalId = 1;
 
 export function ReactionsBar({
-  targetRef,
+  targetRef: _targetRef,
 }: {
   targetRef: React.RefObject<HTMLElement | null>;
 }) {
-  const { channel, player } = useRoomChannel();
+  const { channel, player, roomId } = useRoomChannel();
   const [floats, setFloats] = useState<Reaction[]>([]);
+  // Track which IDs we've already rendered so broadcast + catch-up fetch +
+  // local spawn don't duplicate the same reaction on screen.
+  const seenRef = useRef<Set<string>>(new Set());
 
-  // Receive reactions
+  // Live broadcast — fast path, arrives within a frame or two.
   useEffect(() => {
     if (!channel) return;
     channel.on(
@@ -31,34 +42,86 @@ export function ReactionsBar({
       { event: "reaction" },
       (event: { payload?: unknown }) => {
         const p = event.payload as
-          | { emoji: string; x: number; y: number; color: string; id?: string }
+          | { id?: string; emoji: string; x: number; y: number; color: string }
           | undefined;
         if (!p) return;
-        spawn(p.emoji, p.x, p.y, p.color);
+        spawn(p.id ?? `remote:${nextLocalId++}`, p.emoji, p.x, p.y, p.color);
       },
     );
   }, [channel]);
 
-  function spawn(emoji: string, x: number, y: number, color: string) {
-    const id = nextId++;
+  // Catch-up fetch on mount — covers late joiners, tab refresh, reconnects.
+  // The broadcast channel only delivers events that happen after subscribe;
+  // without this, someone who joins 3s after a reaction just missed it.
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    let cancelled = false;
+    (async () => {
+      const sinceIso = new Date(
+        Date.now() - CATCHUP_WINDOW_SECONDS * 1000,
+      ).toISOString();
+      const { data } = await supabase
+        .from("room_reactions")
+        .select("id, emoji, color, x, y, created_at")
+        .eq("room_id", roomId)
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: true })
+        .limit(50);
+      if (cancelled || !data) return;
+      for (const r of data) {
+        spawn(r.id, r.emoji, r.x, r.y, r.color);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId]);
+
+  function spawn(id: string, emoji: string, x: number, y: number, color: string) {
+    if (seenRef.current.has(id)) return;
+    seenRef.current.add(id);
     setFloats((prev) => [...prev, { id, emoji, x, y, color }]);
     setTimeout(() => {
       setFloats((prev) => prev.filter((r) => r.id !== id));
+      // Leave the id in seenRef — we never want to re-render the same
+      // reaction, even if a stale broadcast arrives after the animation
+      // finishes. The set is per-session so it can't grow unbounded.
     }, 1800);
   }
 
-  function fire(emoji: string) {
+  async function fire(emoji: string) {
     const x = 0.15 + Math.random() * 0.7;
     const y = 0.85;
-    // Always render locally so the clicker sees instant feedback even if the
-    // realtime channel hasn't finished subscribing yet.
-    spawn(emoji, x, y, player.color);
-    if (!channel) return;
-    channel.send({
-      type: "broadcast",
-      event: "reaction",
-      payload: { emoji, x, y, color: player.color },
-    });
+    // Instant local feedback — even if the channel is still connecting or
+    // the RPC round-trips slowly, the clicker sees their own emoji fly.
+    const localId = `local:${nextLocalId++}`;
+    spawn(localId, emoji, x, y, player.color);
+
+    // Broadcast for the fast path to other tabs in the same room.
+    if (channel) {
+      channel.send({
+        type: "broadcast",
+        event: "reaction",
+        payload: { id: localId, emoji, x, y, color: player.color },
+      });
+    }
+
+    // Persist so the next tab that mounts within CATCHUP_WINDOW_SECONDS
+    // still sees the activity. Rate-limited server-side; silently swallow
+    // errors (it's fire-and-forget and the local+broadcast paths already
+    // delivered the UX).
+    try {
+      const supabase = createSupabaseBrowserClient();
+      await supabase.rpc("post_reaction", {
+        p_room_id: roomId,
+        p_emoji: emoji,
+        p_color: player.color,
+        p_x: x,
+        p_y: y,
+      });
+    } catch {
+      // ignore — reaction UX already happened locally + via broadcast
+    }
   }
 
   return (
