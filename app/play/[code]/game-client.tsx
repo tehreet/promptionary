@@ -28,6 +28,7 @@ type Room = {
   phase: string;
   host_id: string;
   mode: string;
+  teams_enabled?: boolean;
   max_rounds: number;
   guess_seconds: number;
   reveal_seconds: number;
@@ -231,7 +232,7 @@ function GameClientInner({
       const { data: r } = await supabase
         .from("rooms")
         .select(
-          "id, code, phase, host_id, mode, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
+          "id, code, phase, host_id, mode, teams_enabled, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
         )
         .eq("id", room.id)
         .maybeSingle();
@@ -564,7 +565,7 @@ function GameClientInner({
     () => [...competitors].sort((a, b) => b.score - a.score),
     [competitors],
   );
-  const isTeams = room.mode === "teams";
+  const isTeams = !!room.teams_enabled;
   const teamLeaderboard = useMemo(() => {
     if (!isTeams) return [] as Array<{
       team: 1 | 2;

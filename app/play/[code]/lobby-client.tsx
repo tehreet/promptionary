@@ -18,6 +18,7 @@ type Room = {
   phase: string;
   host_id: string;
   mode?: string;
+  teams_enabled?: boolean;
   pack?: PackId;
   max_rounds: number;
   guess_seconds: number;
@@ -83,10 +84,9 @@ function LobbyClientInner({
   const [hostId, setHostId] = useState(room.host_id);
   const [isPending, startTransition] = useTransition();
   const [starting, setStarting] = useState(false);
-  const [mode, setMode] = useState(room.mode ?? "party");
+  const [teamsOn, setTeamsOn] = useState(!!room.teams_enabled);
   const [teamsBusy, setTeamsBusy] = useState(false);
   const isHost = hostId === currentPlayerId;
-  const teamsOn = mode === "teams";
 
   useEffect(() => {
     if (phase !== "lobby") router.refresh();
@@ -148,11 +148,11 @@ function LobbyClientInner({
           const next = payload.new as {
             phase: string;
             host_id: string;
-            mode?: string;
+            teams_enabled?: boolean;
           };
           setPhase(next.phase);
           if (next.host_id) setHostId(next.host_id);
-          if (next.mode) setMode(next.mode);
+          if (typeof next.teams_enabled === "boolean") setTeamsOn(next.teams_enabled);
         },
       )
       .subscribe();
@@ -168,12 +168,12 @@ function LobbyClientInner({
       if (data) setPlayers(data as Player[]);
       const { data: r } = await supabase
         .from("rooms")
-        .select("phase, host_id, mode")
+        .select("phase, host_id, teams_enabled")
         .eq("id", room.id)
         .maybeSingle();
       if (r?.phase) setPhase(r.phase);
       if (r?.host_id) setHostId(r.host_id);
-      if (r?.mode) setMode(r.mode);
+      if (typeof r?.teams_enabled === "boolean") setTeamsOn(r.teams_enabled);
     }, 2000);
 
     return () => {
@@ -198,12 +198,12 @@ function LobbyClientInner({
     setTeamsBusy(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.rpc("set_room_mode", {
+      const { error } = await supabase.rpc("set_teams_enabled", {
         p_room_id: room.id,
-        p_mode: nextOn ? "teams" : "party",
+        p_enabled: nextOn,
       });
       if (error) throw error;
-      setMode(nextOn ? "teams" : "party");
+      setTeamsOn(nextOn);
     } catch (e) {
       alert(e instanceof Error ? e.message : "failed to toggle teams");
     } finally {
@@ -280,7 +280,7 @@ function LobbyClientInner({
         </div>
       )}
 
-      {isHost && room.mode !== "artist" && phase === "lobby" && (
+      {isHost && phase === "lobby" && (
         <div
           data-teams-controls="1"
           className="w-full max-w-2xl flex flex-wrap items-center justify-center gap-3 rounded-2xl bg-card border border-border px-4 py-3 shadow-sm"

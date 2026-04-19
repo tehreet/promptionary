@@ -344,6 +344,7 @@ export type Database = {
           phase_ends_at: string | null
           reveal_seconds: number
           round_num: number
+          teams_enabled: boolean
         }
         Insert: {
           code: string
@@ -358,6 +359,7 @@ export type Database = {
           phase_ends_at?: string | null
           reveal_seconds?: number
           round_num?: number
+          teams_enabled?: boolean
         }
         Update: {
           code?: string
@@ -372,6 +374,7 @@ export type Database = {
           phase_ends_at?: string | null
           reveal_seconds?: number
           round_num?: number
+          teams_enabled?: boolean
         }
         Relationships: []
       }
@@ -550,11 +553,8 @@ export type Database = {
         Args: { p_player_id: string; p_room_id: string; p_team: number }
         Returns: undefined
       }
-      set_room_mode: {
-        Args: {
-          p_mode: Database["public"]["Enums"]["room_mode"]
-          p_room_id: string
-        }
+      set_teams_enabled: {
+        Args: { p_enabled: boolean; p_room_id: string }
         Returns: undefined
       }
       start_round: { Args: { p_room_id: string }; Returns: string }
