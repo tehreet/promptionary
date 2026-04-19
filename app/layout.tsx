@@ -46,8 +46,8 @@ export const metadata: Metadata = {
 // Discord uses the first `theme-color` meta for the embed's left bar;
 // Safari/iOS uses it for the address bar tint.
 export const viewport: Viewport = {
-  // Site is dark-only — theme-color mirrors --game-canvas-dark.
-  themeColor: "#0b0920",
+  // Site is light-only — theme-color mirrors --game-canvas-yellow.
+  themeColor: "#ffe15e",
 };
 
 export default async function RootLayout({
@@ -75,7 +75,8 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${geist.variable} ${geistMono.variable} ${unbounded.variable} h-full antialiased`}
+      className={`${geist.variable} ${geistMono.variable} ${unbounded.variable} h-full antialiased`}
+      style={{ colorScheme: "light" }}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
