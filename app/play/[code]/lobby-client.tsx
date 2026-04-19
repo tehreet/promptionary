@@ -367,20 +367,37 @@ function LobbyClientInner({
                       >
                         {p.display_name.slice(0, 2).toUpperCase()}
                       </span>
-                      <span className="font-heading font-bold flex-1 break-words min-w-0">
+                      <span
+                        className="font-heading font-bold flex-1 truncate min-w-0"
+                        title={p.display_name}
+                      >
                         {p.display_name}
                       </span>
-                      {p.is_host && (
+                      {p.player_id === currentPlayerId && (
                         <span
-                          className="sticker text-[10px]"
+                          className="sticker text-[10px] font-black uppercase tracking-wider"
                           style={
                             {
-                              ["--sticker-tilt" as string]: "2deg",
+                              ["--sticker-tilt" as string]: "-3deg",
+                              background: "var(--game-pink)",
+                              color: "var(--game-cream)",
+                            } as React.CSSProperties
+                          }
+                        >
+                          you
+                        </span>
+                      )}
+                      {p.is_host && (
+                        <span
+                          className="sticker text-[11px] font-black uppercase tracking-wider"
+                          style={
+                            {
+                              ["--sticker-tilt" as string]: "3deg",
                               background: "var(--game-canvas-yellow)",
                             } as React.CSSProperties
                           }
                         >
-                          host
+                          👑 host
                         </span>
                       )}
                       {isHost && (
@@ -473,20 +490,37 @@ function LobbyClientInner({
                 >
                   {p.display_name.slice(0, 2).toUpperCase()}
                 </span>
-                <span className="font-heading font-bold flex-1 break-words min-w-0">
+                <span
+                  className="font-heading font-bold flex-1 truncate min-w-0"
+                  title={p.display_name}
+                >
                   {p.display_name}
                 </span>
-                {p.is_host && (
+                {p.player_id === currentPlayerId && (
                   <span
-                    className="sticker text-[10px]"
+                    className="sticker text-[10px] font-black uppercase tracking-wider"
                     style={
                       {
-                        ["--sticker-tilt" as string]: "2deg",
+                        ["--sticker-tilt" as string]: "-3deg",
+                        background: "var(--game-pink)",
+                        color: "var(--game-cream)",
+                      } as React.CSSProperties
+                    }
+                  >
+                    you
+                  </span>
+                )}
+                {p.is_host && (
+                  <span
+                    className="sticker text-[11px] font-black uppercase tracking-wider"
+                    style={
+                      {
+                        ["--sticker-tilt" as string]: "3deg",
                         background: "var(--game-canvas-yellow)",
                       } as React.CSSProperties
                     }
                   >
-                    host
+                    👑 host
                   </span>
                 )}
                 {isHost && p.player_id !== currentPlayerId && (
