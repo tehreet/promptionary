@@ -138,6 +138,42 @@ Prompt: "${prompt}"`;
   return { tokens: parsed.tokens ?? [] };
 }
 
+// Lightweight safety classifier for user-written artist prompts. Uses the
+// same cheap `gemini-2.5-flash` model as the authoring pipeline. We default
+// to SAFE on any unrecognized output or parse weirdness — blocking gameplay
+// on flaky moderation is worse than waving through an edge case.
+export async function moderatePrompt(
+  text: string,
+): Promise<{ safe: boolean; reason?: string }> {
+  const instruction = `You are a moderator for a party game called Promptionary. The user below is about to send the following text to an AI image generator that all players in the room will see. Decide if the prompt is safe for a mixed audience — no hateful content, no sexual content, no graphic violence, no personal attacks, no slurs, no targeting of real private individuals. Standard playful edge (cartoon goofiness, mild crude humor, fantasy violence like dragons fighting knights) is fine.
+
+Reply with exactly one line in one of these two forms, nothing else:
+SAFE
+UNSAFE: <short, player-friendly reason>
+
+Prompt:
+"""${text}"""`;
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: instruction,
+    config: { temperature: 0 },
+  });
+  const raw = (response.text ?? "").trim();
+  if (!raw) return { safe: true };
+  const firstLine = raw.split(/\r?\n/)[0]?.trim() ?? "";
+  if (/^safe\b/i.test(firstLine)) return { safe: true };
+  const unsafeMatch = firstLine.match(/^unsafe\s*[:\-–—]?\s*(.*)$/i);
+  if (unsafeMatch) {
+    const reason = unsafeMatch[1]?.trim();
+    return {
+      safe: false,
+      reason: reason && reason.length > 0 ? reason : undefined,
+    };
+  }
+  // Unrecognized shape — fail open so Gemini hiccups don't block real players.
+  return { safe: true };
+}
+
 export async function generateImagePng(prompt: string): Promise<Buffer> {
   let lastErr: unknown;
   for (const model of IMAGE_MODELS) {
