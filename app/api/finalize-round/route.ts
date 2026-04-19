@@ -150,6 +150,13 @@ export async function POST(req: Request) {
       .update({ score: current + delta })
       .eq("room_id", room.id)
       .eq("player_id", playerId);
+
+    // Lifetime stats bump for signed-in players. The RPC is a no-op for
+    // anon users (no profiles row matches) so we don't need to pre-filter.
+    await svc.rpc("bump_round_stats", {
+      p_player_id: playerId,
+      p_round_total: delta,
+    });
   }
 
   await svc
@@ -157,11 +164,64 @@ export async function POST(req: Request) {
     .update({ ended_at: new Date().toISOString() })
     .eq("id", round.id);
 
-  if (room.round_num >= room.max_rounds) {
+  const isGameOver = room.round_num >= room.max_rounds;
+
+  if (isGameOver) {
     await svc
       .from("rooms")
       .update({ phase: "game_over", phase_ends_at: null })
       .eq("id", room.id);
+
+    // Lifetime games/wins bump. Compute winners from the final scoreboard:
+    //   - Teams mode: every member of the team with the highest average wins.
+    //   - Non-teams:  every player tied for the top score wins (usually one).
+    const { data: finalPlayers } = await svc
+      .from("room_players")
+      .select("player_id, score, team, is_spectator")
+      .eq("room_id", room.id);
+
+    const { data: roomCfg } = await svc
+      .from("rooms")
+      .select("teams_enabled")
+      .eq("id", room.id)
+      .maybeSingle();
+
+    const competitors = (finalPlayers ?? []).filter((p) => !p.is_spectator);
+    const winners = new Set<string>();
+    if (roomCfg?.teams_enabled) {
+      const byTeam = new Map<number, { total: number; count: number; members: string[] }>();
+      for (const p of competitors) {
+        if (p.team !== 1 && p.team !== 2) continue;
+        const bucket = byTeam.get(p.team) ?? { total: 0, count: 0, members: [] };
+        bucket.total += p.score;
+        bucket.count += 1;
+        bucket.members.push(p.player_id);
+        byTeam.set(p.team, bucket);
+      }
+      let bestAvg = -Infinity;
+      for (const { total, count } of byTeam.values()) {
+        const avg = count > 0 ? total / count : 0;
+        if (avg > bestAvg) bestAvg = avg;
+      }
+      for (const { total, count, members } of byTeam.values()) {
+        const avg = count > 0 ? total / count : 0;
+        if (avg === bestAvg) members.forEach((id) => winners.add(id));
+      }
+    } else {
+      const top = competitors.reduce((m, p) => Math.max(m, p.score), 0);
+      if (top > 0) {
+        for (const p of competitors) {
+          if (p.score === top) winners.add(p.player_id);
+        }
+      }
+    }
+
+    for (const p of competitors) {
+      await svc.rpc("bump_game_stats", {
+        p_player_id: p.player_id,
+        p_did_win: winners.has(p.player_id),
+      });
+    }
   } else {
     const revealEndsAt = new Date(
       Date.now() + room.reveal_seconds * 1000,
