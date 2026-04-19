@@ -21,7 +21,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
           ["--sticker-tilt"]: "0deg",
           ...(dark
             ? {
-                background: "var(--game-ink)",
+                background: "var(--game-canvas-dark)",
                 color: "var(--game-canvas-yellow)",
               }
             : {}),

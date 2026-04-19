@@ -96,7 +96,7 @@ export default async function Home() {
       <section
         className="w-full max-w-3xl rounded-[22px] px-6 py-9 sm:px-10 sm:py-11 game-card"
         style={{
-          background: "var(--game-ink)",
+          background: "var(--game-canvas-dark)",
           color: "var(--game-cream)",
         }}
       >

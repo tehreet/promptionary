@@ -107,6 +107,21 @@ test.describe("design tokens", () => {
     await ctx.close();
   });
 
+  test("landing 'How it goes down' card stays readable when .dark class is active", async ({ page }) => {
+    await page.goto("/");
+    const heading = page.getByRole("heading", { name: /How it goes down/i });
+    await expect(heading).toBeVisible();
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    const { sectionBg, headingColor } = await heading.evaluate((el) => {
+      const section = el.closest("section") as HTMLElement;
+      return {
+        sectionBg: getComputedStyle(section).backgroundColor,
+        headingColor: getComputedStyle(el as HTMLElement).color,
+      };
+    });
+    expect(sectionBg).not.toBe(headingColor);
+  });
+
   test("non-landing pages flip canvas in dark mode", async ({ browser }) => {
     for (const route of ["/leaders", "/sign-in"]) {
       const light = await browser.newContext({ colorScheme: "light" });
