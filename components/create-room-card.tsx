@@ -17,13 +17,16 @@ export function CreateRoomCard({
     [defaultName],
   );
   const [advanced, setAdvanced] = useState(false);
-  const [mode, setMode] = useState<"party" | "artist">("party");
+  const [mode, setMode] = useState<"party" | "artist">("artist");
   const [pack, setPack] = useState<PackId>("mixed");
   return (
-    <Card className="w-full max-w-sm bg-card/90 backdrop-blur border-border shadow-xl rounded-3xl">
+    <Card
+      className="w-full max-w-sm game-card md:-rotate-1 p-0 border-none"
+      style={{ background: "var(--game-pink)", color: "var(--game-ink)" }}
+    >
       <CardHeader>
         <CardTitle className="text-2xl font-heading font-black">
-          Create a Room
+          Open a room
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -36,6 +39,8 @@ export function CreateRoomCard({
               defaultValue={initialName}
               maxLength={24}
               required
+              className="bg-white border-2 rounded-lg h-10"
+              style={{ borderColor: "var(--game-ink)", color: "var(--game-ink)" }}
             />
           </div>
 
@@ -44,16 +49,16 @@ export function CreateRoomCard({
             <Label>Mode</Label>
             <div className="grid grid-cols-2 gap-2">
               <ModeButton
-                active={mode === "party"}
-                onClick={() => setMode("party")}
-                title="Party"
-                subtitle="AI picks the prompt"
-              />
-              <ModeButton
                 active={mode === "artist"}
                 onClick={() => setMode("artist")}
                 title="Artist"
-                subtitle="You write the prompts"
+                subtitle="One writes · others guess"
+              />
+              <ModeButton
+                active={mode === "party"}
+                onClick={() => setMode("party")}
+                title="Party"
+                subtitle="AI writes · all guess"
               />
             </div>
           </div>
@@ -78,11 +83,14 @@ export function CreateRoomCard({
                       data-pack={p}
                       onClick={() => setPack(p)}
                       title={meta.blurb}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold border transition ${
-                        pack === p
-                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                          : "bg-card border-border hover:bg-muted"
+                      className={`rounded-full px-3 py-1.5 text-xs font-black border-2 transition ${
+                        pack === p ? "" : "hover:opacity-80"
                       }`}
+                      style={
+                        pack === p
+                          ? { background: "var(--game-ink)", color: "var(--game-canvas-yellow)", borderColor: "var(--game-ink)" }
+                          : { background: "var(--game-paper)", color: "var(--game-ink)", borderColor: "var(--game-ink)" }
+                      }
                     >
                       <span className="mr-1">{meta.emoji}</span>
                       {meta.title}
@@ -123,9 +131,15 @@ export function CreateRoomCard({
 
           <Button
             type="submit"
-            className="w-full h-12 rounded-xl font-bold text-base"
+            className="w-full h-12 rounded-xl font-heading font-black text-base border-2"
+            style={{
+              background: "var(--game-canvas-yellow)",
+              color: "var(--game-ink)",
+              borderColor: "var(--game-ink)",
+              boxShadow: "3px 3px 0 var(--game-ink)",
+            }}
           >
-            Create Room
+            Start →
           </Button>
         </form>
       </CardContent>
@@ -148,11 +162,14 @@ function ModeButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl px-3 py-2 border text-left transition ${
-        active
-          ? "bg-primary text-primary-foreground border-primary font-bold shadow-sm"
-          : "bg-card border-border hover:bg-muted"
+      className={`rounded-xl px-3 py-2 border-2 text-left transition ${
+        active ? "font-black" : "hover:opacity-80"
       }`}
+      style={
+        active
+          ? { background: "var(--game-ink)", color: "var(--game-canvas-yellow)", borderColor: "var(--game-ink)" }
+          : { background: "var(--game-paper)", color: "var(--game-ink)", borderColor: "var(--game-ink)" }
+      }
     >
       <p className="text-sm font-semibold">{title}</p>
       <p className="text-[11px] opacity-80">{subtitle}</p>
@@ -188,7 +205,8 @@ function ConfigField({
         defaultValue={def}
         min={min}
         max={max}
-        className="text-center font-mono h-9"
+        className="bg-white border-2 rounded-lg h-10"
+        style={{ borderColor: "var(--game-ink)", color: "var(--game-ink)" }}
       />
     </div>
   );
