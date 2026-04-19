@@ -63,13 +63,18 @@ export function ReactionsBar({
 
   return (
     <>
-      <div className="flex flex-wrap justify-center gap-1.5">
-        {REACTIONS.map((e) => (
+      <div className="flex flex-wrap justify-center gap-2">
+        {REACTIONS.map((e, i) => (
           <button
             key={e}
             type="button"
             onClick={() => fire(e)}
-            className="h-10 w-10 rounded-full bg-card border border-border hover:bg-muted transition text-xl leading-none shadow-sm active:scale-95"
+            className="sticker text-base active:scale-95"
+            style={
+              {
+                ["--sticker-tilt" as string]: `${i % 2 === 0 ? -3 : 3}deg`,
+              } as React.CSSProperties
+            }
             aria-label={`react with ${e}`}
           >
             {e}

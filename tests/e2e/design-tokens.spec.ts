@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { createRoomAs } from "./helpers";
 
 test.describe("design tokens", () => {
   test("landing still renders with foreground + background tokens applied", async ({ page }) => {
@@ -19,5 +20,11 @@ test.describe("design tokens", () => {
     await expect(hero).toBeVisible();
     const mark = page.locator(".game-hero-mark").first();
     await expect(mark).toHaveText(/prompt/);
+  });
+
+  test("lobby uses game-canvas", async ({ page }) => {
+    const code = await createRoomAs(page, `Spec${Date.now()}`);
+    await page.goto(`/play/${code}`);
+    await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
   });
 });

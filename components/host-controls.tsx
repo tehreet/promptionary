@@ -43,7 +43,7 @@ export function HostControls({
   }
 
   return (
-    <div className="flex items-center gap-1 ml-auto shrink-0">
+    <div className="flex items-center gap-1.5 ml-auto shrink-0">
       {canMakeHost && (
         <button
           type="button"
@@ -51,7 +51,11 @@ export function HostControls({
           disabled={busy}
           aria-label={`Make ${victimName} host`}
           title="Make host"
-          className="h-7 w-7 rounded-full bg-muted hover:bg-accent text-foreground inline-flex items-center justify-center text-xs disabled:opacity-50"
+          className="game-card w-8 h-8 flex items-center justify-center rounded-full text-sm disabled:opacity-50"
+          style={{
+            background: "var(--game-canvas-yellow)",
+            color: "var(--game-ink)",
+          }}
         >
           👑
         </button>
@@ -63,7 +67,11 @@ export function HostControls({
           disabled={busy}
           aria-label={`Kick ${victimName}`}
           title="Kick player"
-          className="h-7 w-7 rounded-full bg-muted hover:bg-destructive hover:text-white text-foreground inline-flex items-center justify-center text-sm leading-none disabled:opacity-50"
+          className="game-card w-8 h-8 flex items-center justify-center rounded-full text-sm disabled:opacity-50"
+          style={{
+            background: "var(--destructive)",
+            color: "var(--destructive-foreground, var(--game-cream))",
+          }}
         >
           ✕
         </button>
