@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { colorForPlayer } from "@/lib/player";
@@ -32,11 +33,16 @@ export function LobbyClient({
   initialPlayers: Player[];
   currentPlayerId: string;
 }) {
+  const router = useRouter();
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const [phase, setPhase] = useState(room.phase);
   const [isPending, startTransition] = useTransition();
   const [starting, setStarting] = useState(false);
   const isHost = room.host_id === currentPlayerId;
+
+  useEffect(() => {
+    if (phase !== "lobby") router.refresh();
+  }, [phase, router]);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureAnonSession } from "@/app/actions/auth";
 import { LobbyClient } from "./lobby-client";
+import { GameClient } from "./game-client";
 
 export default async function LobbyPage({
   params,
@@ -17,7 +18,9 @@ export default async function LobbyPage({
   const supabase = await createSupabaseServerClient();
   const { data: room, error } = await supabase
     .from("rooms")
-    .select("id, code, phase, host_id, max_rounds, guess_seconds, round_num")
+    .select(
+      "id, code, phase, host_id, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
+    )
     .eq("code", code)
     .maybeSingle();
 
@@ -33,10 +36,20 @@ export default async function LobbyPage({
     redirect(`/?join=${code}`);
   }
 
+  if (room.phase === "lobby") {
+    return (
+      <LobbyClient
+        room={room}
+        initialPlayers={members ?? []}
+        currentPlayerId={user.id}
+      />
+    );
+  }
+
   return (
-    <LobbyClient
+    <GameClient
       room={room}
-      initialPlayers={members ?? []}
+      players={members ?? []}
       currentPlayerId={user.id}
     />
   );
