@@ -18,6 +18,7 @@ import {
   playSubmit,
   playWinnerCheer,
 } from "@/lib/sfx";
+import { PromptFlipboard, type PromptToken } from "@/components/prompt-flipboard";
 
 type Room = {
   id: string;
@@ -128,6 +129,7 @@ function GameClientInner({
   const [myGuess, setMyGuess] = useState<string>("");
   const [guessSubmitted, setGuessSubmitted] = useState<boolean>(false);
   const [guessesFromReveal, setGuessesFromReveal] = useState<Guess[]>([]);
+  const [promptTokens, setPromptTokens] = useState<PromptToken[]>([]);
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const isHost = room.host_id === currentPlayerId;
 
@@ -404,7 +406,8 @@ function GameClientInner({
     })();
   }, [isHost, room.phase, room.phase_ends_at, remaining, room.id, room.round_num]);
 
-  // When entering reveal phase, fetch all scored guesses so everyone sees them
+  // When entering reveal phase, fetch all scored guesses + role tokens so
+  // everyone sees the recap.
   useEffect(() => {
     if (room.phase !== "reveal" && room.phase !== "game_over") return;
     if (!currentRound?.id) return;
@@ -416,6 +419,12 @@ function GameClientInner({
         .eq("round_id", currentRound.id)
         .order("total_score", { ascending: false });
       if (data) setGuessesFromReveal(data as Guess[]);
+      const { data: tokens } = await supabase
+        .from("round_prompt_tokens")
+        .select("position, token, role")
+        .eq("round_id", currentRound.id)
+        .order("position", { ascending: true });
+      if (tokens) setPromptTokens(tokens as PromptToken[]);
     })();
   }, [room.phase, currentRound?.id]);
 
@@ -752,12 +761,10 @@ function GameClientInner({
             </LiveCursorsOverlay>
           )}
           {currentRound?.prompt && (
-            <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-5 text-center">
-              <p className="text-xs uppercase tracking-widest opacity-70 mb-1">
-                The prompt was
-              </p>
-              <p className="text-xl font-bold">&ldquo;{currentRound.prompt}&rdquo;</p>
-            </div>
+            <PromptFlipboard
+              prompt={currentRound.prompt}
+              tokens={promptTokens}
+            />
           )}
           <ul className="w-full space-y-2">
             {guessesFromReveal.map((g, i) => (
@@ -766,6 +773,7 @@ function GameClientInner({
                 rank={i + 1}
                 guess={g}
                 player={playerById.get(g.player_id)}
+                topScore={guessesFromReveal[0]?.total_score ?? 0}
               />
             ))}
           </ul>
@@ -809,14 +817,25 @@ function GuessRow({
   rank,
   guess,
   player,
+  topScore,
 }: {
   rank: number;
   guess: Guess;
   player: Player | undefined;
+  topScore: number;
 }) {
   const score = useAnimatedNumber(guess.total_score, 900);
+  const isTop = rank === 1 && guess.total_score > 0;
+  const nailedIt = isTop && guess.total_score >= 80;
   return (
-    <li className="rounded-2xl px-3 sm:px-4 py-3 bg-card border border-border flex items-start gap-3 sm:gap-4 shadow-sm">
+    <li
+      data-top-guess={isTop ? "1" : undefined}
+      className={`rounded-2xl px-3 sm:px-4 py-3 border flex items-start gap-3 sm:gap-4 shadow-sm ${
+        isTop
+          ? "bg-accent border-[color:var(--brand-fuchsia)]/40 ring-2 ring-[color:var(--brand-fuchsia)]/40"
+          : "bg-card border-border"
+      }`}
+    >
       <span className="w-5 sm:w-6 text-center font-black text-muted-foreground pt-0.5 text-sm sm:text-base">
         {rank}
       </span>
@@ -827,9 +846,20 @@ function GuessRow({
         {player?.display_name[0]?.toUpperCase()}
       </span>
       <div className="flex-1 min-w-0">
-        <p className="font-semibold truncate text-sm sm:text-base">
-          {player?.display_name ?? "—"}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="font-semibold truncate text-sm sm:text-base">
+            {player?.display_name ?? "—"}
+          </p>
+          {isTop && (
+            <span
+              className="nailed-pop inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-fuchsia)] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-0.5 shadow-sm"
+              style={{ animationDelay: "0.4s" }}
+              data-nailed-it={nailedIt ? "1" : "0"}
+            >
+              🎯 {nailedIt ? "nailed it" : "top guess"}
+            </span>
+          )}
+        </div>
         <p className="text-sm text-foreground/80 italic whitespace-pre-wrap break-words leading-relaxed">
           &ldquo;{guess.guess}&rdquo;
         </p>

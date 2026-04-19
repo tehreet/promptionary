@@ -216,4 +216,47 @@
     background-clip: text;
     color: transparent;
   }
+
+  /* Flipboard reveal — used on the prompt recap at reveal/game_over. */
+  @keyframes prompt-flip-in {
+    0% {
+      transform: rotateX(-92deg) translateY(-0.25em);
+      opacity: 0;
+      filter: blur(2px);
+    }
+    55% {
+      transform: rotateX(14deg);
+      opacity: 1;
+      filter: blur(0);
+    }
+    100% {
+      transform: rotateX(0);
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+  .prompt-flip {
+    transform-origin: top center;
+    animation: prompt-flip-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .prompt-flip {
+      animation: none;
+    }
+  }
+
+  /* Nailed-it callout on the top guess row. */
+  @keyframes nailed-pop {
+    0% { transform: scale(0.2) rotate(-8deg); opacity: 0; }
+    60% { transform: scale(1.15) rotate(3deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  .nailed-pop {
+    animation: nailed-pop 0.55s cubic-bezier(0.25, 1.4, 0.4, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nailed-pop { animation: none; }
+  }
 }
