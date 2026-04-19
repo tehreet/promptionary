@@ -458,7 +458,11 @@ function GameClientInner({
         spread: 55,
         startVelocity: 35,
         origin: { y: 0.35 },
-        colors: ["#6366f1", "#d946ef", "#f43f5e", "#fde68a"],
+        // Hex resolved from the new brand palette: pink (--game-pink),
+        // cyan (--game-cyan), canvas yellow (--game-canvas-yellow), cream.
+        // canvas-confetti doesn't pick up CSS vars at runtime — these must
+        // stay literal and kept in sync with app/globals.css by hand.
+        colors: ["#ff5eb4", "#3ddce0", "#ffe15e", "#fff7d6"],
         disableForReducedMotion: true,
       });
     }
@@ -471,7 +475,10 @@ function GameClientInner({
         particleCount: 150,
         spread: 70,
         origin: { y: 0.4 },
-        colors: ["#6366f1", "#d946ef", "#f43f5e", "#fde68a", "#a78bfa"],
+        // Same palette as the reveal burst plus the ink-soft purple.
+        // canvas-confetti can't read CSS vars — hex must be updated by
+        // hand if the game tokens ever move.
+        colors: ["#ff5eb4", "#3ddce0", "#ffe15e", "#fff7d6", "#3d2a7d"],
       });
       fire(250, {
         particleCount: 90,
@@ -1003,7 +1010,7 @@ function GuessRow({
       data-top-guess={isTop ? "1" : undefined}
       className={`rounded-2xl px-3 sm:px-4 py-3 border flex items-start gap-3 sm:gap-4 shadow-sm ${
         isTop
-          ? "bg-accent border-[color:var(--brand-fuchsia)]/40 ring-2 ring-[color:var(--brand-fuchsia)]/40"
+          ? "bg-accent border-[color:var(--game-pink)]/60 ring-2 ring-[color:var(--game-pink)]/40"
           : "bg-card border-border"
       }`}
     >
@@ -1025,7 +1032,7 @@ function GuessRow({
           </p>
           {isTop && (
             <span
-              className="nailed-pop inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-fuchsia)] text-[var(--game-cream)] text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-0.5 shadow-sm"
+              className="nailed-pop inline-flex items-center gap-1 rounded-full bg-[color:var(--game-pink)] text-[var(--game-cream)] text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-0.5 shadow-sm"
               style={{ animationDelay: "0.4s" }}
               data-nailed-it={nailedIt ? "1" : "0"}
             >

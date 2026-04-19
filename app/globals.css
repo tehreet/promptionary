@@ -41,13 +41,6 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
-  --color-brand-indigo: var(--brand-indigo);
-  --color-brand-fuchsia: var(--brand-fuchsia);
-  --color-brand-rose: var(--brand-rose);
-  --color-surface: var(--surface);
-  --color-surface-raised: var(--surface-raised);
-  --color-surface-foreground: var(--surface-foreground);
-
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -59,10 +52,6 @@
 
 /* Light mode — warm cream with brand accents */
 :root {
-  --brand-indigo: oklch(0.57 0.24 268);
-  --brand-fuchsia: oklch(0.68 0.28 325);
-  --brand-rose: oklch(0.69 0.24 15);
-
   --background: var(--game-canvas-warm);
   --foreground: var(--game-ink);
   --card: var(--game-paper);
@@ -81,10 +70,6 @@
   --border: var(--game-ink);
   --input: var(--game-ink);
   --ring: var(--game-ink);
-
-  --surface: var(--game-paper);
-  --surface-raised: var(--game-paper);
-  --surface-foreground: var(--game-ink);
 
   --chart-1: var(--game-pink);
   --chart-2: var(--game-cyan);
@@ -138,11 +123,6 @@
   --game-cyan: #6fe8eb;
   --game-orange: #ffa15e;
 
-  /* Brand legacy — deleted in Task 10 */
-  --brand-indigo: oklch(0.7 0.22 268);
-  --brand-fuchsia: oklch(0.75 0.25 325);
-  --brand-rose: oklch(0.76 0.2 15);
-
   --background: var(--game-canvas-warm);
   --foreground: var(--game-ink);
   --card: var(--game-paper);
@@ -161,10 +141,6 @@
   --border: var(--game-ink);
   --input: var(--game-ink);
   --ring: var(--game-ink);
-
-  --surface: var(--game-paper);
-  --surface-raised: var(--game-paper);
-  --surface-foreground: var(--game-ink);
 
   --chart-1: var(--game-pink);
   --chart-2: var(--game-cyan);
@@ -199,58 +175,6 @@
 }
 
 @layer utilities {
-  /* Ambient brand gradient for hero/game backgrounds. Lives behind cards so
-     content can lift above it with proper contrast in both themes. */
-  .promptionary-gradient {
-    background:
-      radial-gradient(
-        ellipse 80% 60% at 20% 0%,
-        color-mix(in oklch, var(--brand-indigo) 60%, transparent),
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 60% 50% at 80% 20%,
-        color-mix(in oklch, var(--brand-fuchsia) 55%, transparent),
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 70% 50% at 50% 100%,
-        color-mix(in oklch, var(--brand-rose) 50%, transparent),
-        transparent 65%
-      ),
-      var(--background);
-  }
-
-  /* Subtle grain overlay to cut the "AI gradient slop" feeling. Applied via a
-     pseudo-element on any container with .promptionary-grain. */
-  .promptionary-grain {
-    position: relative;
-    isolation: isolate;
-  }
-  .promptionary-grain::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.06;
-    mix-blend-mode: overlay;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-    z-index: -1;
-  }
-
-  .text-hero {
-    @apply font-heading font-black tracking-tight;
-    background: linear-gradient(
-      105deg,
-      var(--brand-indigo) 0%,
-      var(--brand-fuchsia) 55%,
-      var(--brand-rose) 100%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
   /* Flipboard reveal — used on the prompt recap at reveal/game_over. */
   @keyframes prompt-flip-in {
     0% {
@@ -426,8 +350,9 @@
   .role-modifier-underline { box-shadow: inset 0 -6px 0 var(--game-orange); }
   .role-filler-underline { box-shadow: inset 0 -6px 0 color-mix(in oklch, var(--game-ink) 20%, transparent); }
 
-  /* Avatar chip — replaces hardcoded text-white/text-black spots across
-     the codebase. Override fill via style={{ "--chip-color": "#ff5eb4" }}. */
+  /* Avatar chip — replaces the old hardcoded white/black text avatar
+     spots across the codebase. Override fill via
+     style={{ "--chip-color": "#ff5eb4" }}. */
   .player-chip {
     --chip-color: var(--game-pink);
     display: inline-flex;

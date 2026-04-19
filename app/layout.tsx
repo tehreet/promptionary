@@ -49,8 +49,10 @@ export const metadata: Metadata = {
 // Safari/iOS uses it for the address bar tint.
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f43f5e" },
-    { media: "(prefers-color-scheme: dark)", color: "#6366f1" },
+    // Hex mirrors --game-canvas-yellow (light) / --game-canvas-dark (dark).
+    // theme-color is consumed by Discord embeds + Safari — must be literal hex.
+    { media: "(prefers-color-scheme: light)", color: "#ffe15e" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0920" },
   ],
 };
 

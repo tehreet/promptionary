@@ -83,4 +83,50 @@ test.describe("design tokens", () => {
     await page.goto("/account");
     await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
   });
+
+  test("legacy utilities and brand tokens no longer appear in rendered HTML", async ({ page }) => {
+    for (const route of ["/", "/daily", "/leaders", "/sign-in"]) {
+      await page.goto(route);
+      const html = await page.content();
+      expect(html).not.toContain("promptionary-gradient");
+      expect(html).not.toContain("promptionary-grain");
+      expect(html).not.toContain("text-hero");
+      expect(html).not.toContain("--brand-indigo");
+      expect(html).not.toContain("--brand-fuchsia");
+      expect(html).not.toContain("--brand-rose");
+    }
+  });
+
+  test("landing light-locks even when user prefers dark", async ({ browser }) => {
+    const ctx = await browser.newContext({ colorScheme: "dark" });
+    const page = await ctx.newPage();
+    await page.goto("/");
+    const scheme = await page
+      .locator("main")
+      .first()
+      .evaluate((el) => getComputedStyle(el).colorScheme);
+    expect(scheme).toBe("light");
+    await ctx.close();
+  });
+
+  test("non-landing pages flip canvas in dark mode", async ({ browser }) => {
+    for (const route of ["/leaders", "/sign-in"]) {
+      const light = await browser.newContext({ colorScheme: "light" });
+      const dark = await browser.newContext({ colorScheme: "dark" });
+      const [lp, dp] = [await light.newPage(), await dark.newPage()];
+      await lp.goto(route);
+      await dp.goto(route);
+      const lightBg = await lp
+        .locator("main")
+        .first()
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      const darkBg = await dp
+        .locator("main")
+        .first()
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(lightBg).not.toBe(darkBg);
+      await light.close();
+      await dark.close();
+    }
+  });
 });
