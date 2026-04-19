@@ -12,6 +12,12 @@ import { ReactionsBar } from "@/components/reactions-bar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { colorForPlayer } from "@/lib/player";
+import {
+  playImageLand,
+  playReveal,
+  playSubmit,
+  playWinnerCheer,
+} from "@/lib/sfx";
 
 type Room = {
   id: string;
@@ -413,13 +419,14 @@ function GameClientInner({
     })();
   }, [room.phase, currentRound?.id]);
 
-  // Confetti on reveal (modest) + game_over (big winner blast)
+  // Confetti + sfx on reveal (modest) + game_over (big winner blast)
   const revealFiredRef = useRef<string | null>(null);
   const gameOverFiredRef = useRef(false);
   useEffect(() => {
     if (room.phase === "reveal" && currentRound?.id) {
       if (revealFiredRef.current === currentRound.id) return;
       revealFiredRef.current = currentRound.id;
+      playReveal();
       confetti({
         particleCount: 80,
         spread: 55,
@@ -431,6 +438,7 @@ function GameClientInner({
     }
     if (room.phase === "game_over" && !gameOverFiredRef.current) {
       gameOverFiredRef.current = true;
+      playWinnerCheer();
       const fire = (delay: number, opts: confetti.Options) =>
         setTimeout(() => confetti({ disableForReducedMotion: true, ...opts }), delay);
       fire(0, {
@@ -458,11 +466,22 @@ function GameClientInner({
     }
   }, [room.phase, currentRound?.id]);
 
+  // Whoosh when the image first lands for a round.
+  const imageLandedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentRound?.id || !currentRound?.image_url) return;
+    if (room.phase !== "guessing") return;
+    if (imageLandedForRef.current === currentRound.id) return;
+    imageLandedForRef.current = currentRound.id;
+    playImageLand();
+  }, [currentRound?.id, currentRound?.image_url, room.phase]);
+
   const submitGuess = useCallback(async () => {
     if (!currentRound?.id) return;
     const text = myGuess.trim();
     if (!text) return;
     setGuessSubmitted(true);
+    playSubmit();
     const supabase = supabaseRef.current;
     const { error } = await supabase.rpc("submit_guess", {
       p_round_id: currentRound.id,
