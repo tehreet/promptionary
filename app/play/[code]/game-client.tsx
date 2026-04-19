@@ -127,9 +127,10 @@ function GameClientInner({
     if (room.phase === "lobby") router.refresh();
   }, [room.phase, router]);
 
-  // If I get kicked mid-game, bounce me home.
+  // If I get kicked mid-game, bounce me home. RLS hides the room from kicked
+  // players so the poll returns []; rely on the server component having
+  // already confirmed membership on page load rather than guarding on length.
   useEffect(() => {
-    if (players.length === 0) return;
     const stillHere = players.some((p) => p.player_id === currentPlayerId);
     if (!stillHere) router.replace("/");
   }, [players, currentPlayerId, router]);

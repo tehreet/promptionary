@@ -75,9 +75,12 @@ function LobbyClientInner({
     if (phase !== "lobby") router.refresh();
   }, [phase, router]);
 
-  // If I get kicked, bounce me back to the home page.
+  // If I get kicked, bounce me back to the home page. After a kick, RLS hides
+  // the whole room from us so the poll returns [] — the empty-guard we used
+  // to have here would swallow exactly that signal. The server component
+  // already verified we were a member, so `initialPlayers` always contains
+  // us; any state where it doesn't means we were removed.
   useEffect(() => {
-    if (players.length === 0) return;
     const stillHere = players.some((p) => p.player_id === currentPlayerId);
     if (!stillHere) router.replace("/");
   }, [players, currentPlayerId, router]);
