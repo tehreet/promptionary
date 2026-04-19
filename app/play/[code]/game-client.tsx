@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { colorForPlayer } from "@/lib/player";
 
 type Room = {
@@ -86,6 +86,12 @@ export function GameClient({
   const [guessesFromReveal, setGuessesFromReveal] = useState<Guess[]>([]);
   const [submissionCount, setSubmissionCount] = useState<number>(0);
   const isHost = room.host_id === currentPlayerId;
+
+  const competitorCount = useMemo(
+    () => players.filter((p) => !p.is_spectator).length,
+    [players],
+  );
+  const submissionTotal = competitorCount || players.length;
   const generatingCalledRef = useRef<string | null>(null);
   const finalizeCalledRef = useRef<string | null>(null);
   const revealAdvanceRef = useRef<string | null>(null);
@@ -262,16 +268,26 @@ export function GameClient({
     })();
   }, [isHost, room.phase, currentRound?.id]);
 
-  // Any member triggers /api/finalize-round when the guessing timer genuinely
-  // expires. Only fires when phase_ends_at is known and in the past —
-  // `remaining === 0` alone is ambiguous because useCountdown returns 0 when
-  // phase_ends_at is null (e.g. during generating/scoring).
+  // Any member triggers /api/finalize-round when the guessing timer expires
+  // OR when every competitor has submitted (via submissionCount, which the
+  // poller keeps fresh via count_round_guesses RPC). Keyed off
+  // phase_ends_at < now() rather than remaining==0 since useCountdown
+  // returns 0 for both "null" and "past".
   useEffect(() => {
     if (room.phase !== "guessing") return;
-    if (!room.phase_ends_at) return;
-    if (new Date(room.phase_ends_at).getTime() > Date.now()) return;
     if (!currentRound?.id) return;
     if (finalizeCalledRef.current === currentRound.id) return;
+
+    const timerExpired =
+      !!room.phase_ends_at &&
+      new Date(room.phase_ends_at).getTime() <= Date.now();
+    const everyoneIn =
+      submissionCount > 0 &&
+      submissionCount >= submissionTotal &&
+      submissionTotal > 0;
+
+    if (!timerExpired && !everyoneIn) return;
+
     finalizeCalledRef.current = currentRound.id;
     (async () => {
       try {
@@ -284,7 +300,14 @@ export function GameClient({
         console.error(e);
       }
     })();
-  }, [room.phase, room.phase_ends_at, remaining, currentRound?.id]);
+  }, [
+    room.phase,
+    room.phase_ends_at,
+    remaining,
+    submissionCount,
+    submissionTotal,
+    currentRound?.id,
+  ]);
 
   // Host advances to next round when the reveal timer genuinely expires.
   // Reading phase_ends_at directly avoids a render race: when phase flips
@@ -341,11 +364,22 @@ export function GameClient({
     }
   }, [currentRound?.id, myGuess]);
 
-  const playerById = new Map(players.map((p) => [p.player_id, p]));
-  const competitors = players.filter((p) => !p.is_spectator);
-  const spectators = players.filter((p) => p.is_spectator);
-  const leaderboard = [...competitors].sort((a, b) => b.score - a.score);
-  const submissionTotal = competitors.length || players.length;
+  const playerById = useMemo(
+    () => new Map(players.map((p) => [p.player_id, p])),
+    [players],
+  );
+  const competitors = useMemo(
+    () => players.filter((p) => !p.is_spectator),
+    [players],
+  );
+  const spectators = useMemo(
+    () => players.filter((p) => p.is_spectator),
+    [players],
+  );
+  const leaderboard = useMemo(
+    () => [...competitors].sort((a, b) => b.score - a.score),
+    [competitors],
+  );
 
   return (
     <main className="min-h-screen flex flex-col items-center gap-6 bg-gradient-to-br from-indigo-500 via-fuchsia-500 to-rose-500 text-white px-6 py-10">
@@ -455,20 +489,31 @@ export function GameClient({
                 e.preventDefault();
                 submitGuess();
               }}
-              className="w-full flex gap-2"
+              className="w-full flex flex-col gap-3"
             >
-              <Input
+              <Textarea
                 value={myGuess}
                 onChange={(e) => setMyGuess(e.target.value)}
-                placeholder="What's the prompt?"
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    submitGuess();
+                  }
+                }}
+                placeholder="What's the prompt? Subjects, style cues, mood — give it your best shot."
                 maxLength={200}
                 autoFocus
-                className="bg-white/20 border-white/30 placeholder:text-white/50 text-white text-lg h-14 rounded-xl"
+                rows={3}
+                className="bg-white/20 border-white/30 placeholder:text-white/50 text-white text-lg rounded-xl min-h-[96px] resize-y leading-relaxed p-4"
               />
+              <div className="flex items-center justify-between text-xs opacity-70">
+                <span>{myGuess.length}/200</span>
+                <span className="hidden sm:inline">⌘/Ctrl + Enter to submit</span>
+              </div>
               <Button
                 type="submit"
                 disabled={!myGuess.trim()}
-                className="bg-white text-indigo-700 hover:bg-white/90 font-bold h-14 px-8 rounded-xl"
+                className="bg-white text-indigo-700 hover:bg-white/90 font-bold h-14 px-8 rounded-xl text-lg"
               >
                 Guess
               </Button>

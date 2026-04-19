@@ -260,13 +260,17 @@ export type Database = {
       create_room: {
         Args: {
           p_display_name: string
+          p_guess_seconds?: number
+          p_max_rounds?: number
           p_mode?: Database["public"]["Enums"]["room_mode"]
+          p_reveal_seconds?: number
         }
         Returns: {
           new_code: string
           new_room_id: string
         }[]
       }
+      everyone_guessed: { Args: { p_round_id: string }; Returns: boolean }
       generate_room_code: { Args: never; Returns: string }
       is_room_member: { Args: { p_room_id: string }; Returns: boolean }
       join_room_by_code: {

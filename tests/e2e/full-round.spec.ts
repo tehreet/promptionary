@@ -1,40 +1,22 @@
-import { test, expect, type Page } from "@playwright/test";
-
-async function setName(page: Page, fieldIndex: number, name: string) {
-  const input = page.getByLabel("Your name").nth(fieldIndex);
-  await input.click();
-  await input.press("ControlOrMeta+a");
-  await input.fill(name);
-}
+import { test, expect } from "@playwright/test";
+import { createRoomAs, joinRoomAs, submitGuess } from "./helpers";
 
 test("full round cycle: create, join, start, guess, reveal", async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(120_000);
 
-  // Host creates room
   const hostCtx = await browser.newContext();
   const host = await hostCtx.newPage();
-  await host.goto("/");
-  const hostName = `Host${Date.now()}`;
-  await setName(host, 0, hostName);
-  await host.getByRole("button", { name: "Create Room" }).click();
-  await host.waitForURL(/\/play\/[A-Z]{4}$/, { timeout: 30_000 });
-  const code = host.url().match(/\/play\/([A-Z]{4})$/)![1];
+  const code = await createRoomAs(host, `Host${Date.now()}`, {
+    maxRounds: 1,
+    revealSeconds: 5,
+  });
 
-  // Joiner joins
   const joinerCtx = await browser.newContext();
   const joiner = await joinerCtx.newPage();
-  await joiner.goto("/");
-  const joinerName = `Joiner${Date.now()}`;
-  await setName(joiner, 1, joinerName);
-  await joiner.getByLabel("Room code").fill(code);
-  await joiner.getByRole("button", { name: "Join Room" }).click();
-  await joiner.waitForURL(new RegExp(`/play/${code}$`), { timeout: 30_000 });
+  await joinRoomAs(joiner, code, `Joiner${Date.now()}`);
 
-  // Host waits for joiner to show in the list, then starts
-  await expect(host.getByText(joinerName)).toBeVisible({ timeout: 10_000 });
   await host.getByRole("button", { name: /Start game/ }).click();
 
-  // Both wait for guessing phase: image renders + "Guess" input appears
   for (const page of [host, joiner]) {
     await expect(
       page.getByRole("textbox", { name: /What's the prompt/ }),
@@ -42,21 +24,13 @@ test("full round cycle: create, join, start, guess, reveal", async ({ browser })
     await expect(page.locator('img[alt="Round"]')).toBeVisible();
   }
 
-  // Both submit guesses
-  for (const [page, text] of [
-    [host, "a cat wearing a top hat"] as const,
-    [joiner, "astronaut riding a horse"] as const,
-  ]) {
-    const input = page.getByRole("textbox", { name: /What's the prompt/ });
-    await input.fill(text);
-    await page.getByRole("button", { name: "Guess", exact: true }).click();
-    await expect(page.getByText(/Guess in!/)).toBeVisible({ timeout: 10_000 });
-  }
+  await submitGuess(host, "a cat wearing a top hat");
+  await submitGuess(joiner, "astronaut riding a horse");
 
-  // Wait for reveal — the true prompt appears
+  // With auto-finalize on all-submitted, reveal should appear quickly.
   for (const page of [host, joiner]) {
     await expect(page.getByText("The prompt was")).toBeVisible({
-      timeout: 90_000,
+      timeout: 30_000,
     });
   }
 
