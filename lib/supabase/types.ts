@@ -156,6 +156,7 @@ export type Database = {
           id: string
           max_rounds: number
           mode: Database["public"]["Enums"]["room_mode"]
+          pack: Database["public"]["Enums"]["room_pack"]
           phase: Database["public"]["Enums"]["room_phase"]
           phase_ends_at: string | null
           reveal_seconds: number
@@ -169,6 +170,7 @@ export type Database = {
           id?: string
           max_rounds?: number
           mode?: Database["public"]["Enums"]["room_mode"]
+          pack?: Database["public"]["Enums"]["room_pack"]
           phase?: Database["public"]["Enums"]["room_phase"]
           phase_ends_at?: string | null
           reveal_seconds?: number
@@ -182,6 +184,7 @@ export type Database = {
           id?: string
           max_rounds?: number
           mode?: Database["public"]["Enums"]["room_mode"]
+          pack?: Database["public"]["Enums"]["room_pack"]
           phase?: Database["public"]["Enums"]["room_phase"]
           phase_ends_at?: string | null
           reveal_seconds?: number
@@ -302,6 +305,7 @@ export type Database = {
           p_guess_seconds?: number
           p_max_rounds?: number
           p_mode?: Database["public"]["Enums"]["room_mode"]
+          p_pack?: Database["public"]["Enums"]["room_pack"]
           p_reveal_seconds?: number
         }
         Returns: {
@@ -355,6 +359,7 @@ export type Database = {
     }
     Enums: {
       room_mode: "party" | "teams" | "headsup" | "artist"
+      room_pack: "mixed" | "food" | "wildlife" | "history" | "absurd"
       room_phase:
         | "lobby"
         | "generating"
@@ -492,6 +497,7 @@ export const Constants = {
   public: {
     Enums: {
       room_mode: ["party", "teams", "headsup", "artist"],
+      room_pack: ["mixed", "food", "wildlife", "history", "absurd"],
       room_phase: [
         "lobby",
         "generating",

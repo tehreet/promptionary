@@ -1,6 +1,8 @@
 // Dimension pools for random scene generation. Five independent dimensions
 // sampled per round. ~100M+ combos before LLM interpretation.
 
+export type PackId = "mixed" | "food" | "wildlife" | "history" | "absurd";
+
 export const SUBJECTS = [
   // animals
   "a river otter", "a corgi", "a pigeon", "a sloth", "a manatee", "a peacock",
@@ -87,14 +89,116 @@ export const STYLES = [
   "1920s newspaper illustration", "fabric cross-stitch",
 ];
 
+// Curated per-pack subject/setting pools. Action/time/style pools stay shared
+// so packs stay expressive without reinventing the authoring surface.
+
+const FOOD_SUBJECTS = [
+  "a pastry chef", "a barista", "a line cook", "a tea sommelier",
+  "a grandmother at the stove", "a sushi master", "a bread baker",
+  "a dumpling auntie", "a pizza apprentice", "a lemonade kid",
+  "a farmer at a market stall", "a hot-dog vendor", "a brunch crew",
+  "a cracked teacup", "a battered kettle", "a singing toaster",
+  "a basket of peaches", "a stack of pancakes", "a wheel of parmesan",
+  "a birthday cake", "a bowl of ramen", "a jar of honey",
+];
+
+const FOOD_SETTINGS = [
+  "a bakery at opening hour", "a noodle shop", "a tea house",
+  "a bustling farmer's market", "a food truck window", "a birthday kitchen",
+  "a soup kitchen", "a dim sum cart", "a harvest field",
+  "a tiny trattoria", "a pizzeria back kitchen", "a sushi counter at closing",
+  "a roadside jam stand", "a greenhouse brimming with herbs",
+  "a community garden", "a rooftop at dusk",
+];
+
+const WILDLIFE_SUBJECTS = [
+  "a river otter", "a sloth", "a manatee", "a peacock", "a chameleon",
+  "a capybara", "a narwhal", "a raccoon", "a fox", "an owl",
+  "a honeybee", "a hermit crab", "a moose", "a panda", "a hedgehog",
+  "a cardinal", "an octopus", "a flamingo", "a badger", "a hummingbird",
+  "a llama", "a mongoose", "a pangolin", "a red panda", "a barn swallow",
+  "a pod of dolphins", "a flock of starlings", "a herd of bison",
+];
+
+const WILDLIFE_SETTINGS = [
+  "a coral reef", "a tidepool", "a mountain trail", "a wildflower field",
+  "a bamboo grove", "a marsh at twilight", "a misty forest floor",
+  "a river bend", "an alpine meadow", "a prairie at dawn",
+  "a mangrove inlet", "a canyon rim", "a kelp forest",
+  "a sunlit savanna", "a frozen tundra", "a cloud forest",
+];
+
+const HISTORY_SUBJECTS = [
+  "a medieval cartographer", "a Renaissance painter at her easel",
+  "a Roman centurion on leave", "a Victorian botanist", "a Tang dynasty poet",
+  "a WWI field nurse", "a 1920s jazz trumpeter", "a Greek chorus",
+  "a pharaoh's scribe", "a Byzantine mosaicist", "a medieval monk",
+  "a 1960s astronaut in training", "a Shakespearean fool",
+  "a Silk Road merchant", "a Prohibition-era speakeasy bartender",
+  "a frontier photographer", "a samurai between battles",
+  "a court alchemist", "an Edwardian librarian",
+];
+
+const HISTORY_SETTINGS = [
+  "a mossy cathedral", "a cliffside monastery", "a dusty archive",
+  "an Art Deco ballroom", "a candlelit scriptorium", "a Roman bathhouse",
+  "a gas-lit pub", "a colonial mapmaker's studio", "an Edwardian parlor",
+  "a medieval marketplace", "a Tang dynasty teahouse", "a Prohibition speakeasy",
+  "a 1920s newsroom", "a temple at dusk", "a harbor of tall ships",
+  "a pyramid antechamber", "a Silk Road caravanserai",
+];
+
+const ABSURD_SUBJECTS = [
+  "a sleepy dragon", "a forgetful wizard", "a shy mermaid",
+  "a grumpy troll", "a dapper skeleton", "a moonlit fox-spirit",
+  "a teenage golem", "a singing toaster", "an abandoned typewriter",
+  "a library card with ambitions", "a philosophical mop",
+  "a committee of crows", "a retired carousel horse",
+  "a ghost still paying rent", "a nervous tooth fairy",
+  "a Bigfoot on laundry day", "a yeti at a DMV", "a kraken learning piano",
+  "a time-traveling pigeon", "a moon in therapy",
+];
+
+const ABSURD_SETTINGS = [
+  "an upside-down diner", "a cloud-city bus stop", "a kraken-sized swimming pool",
+  "a living hedge maze", "a library that rearranges itself",
+  "a thrift shop between dimensions", "a midnight post office for ghosts",
+  "a spaceship laundromat", "a floating island market",
+  "a greenhouse on the moon", "a bureaucracy for weather",
+  "a pocket-universe arcade", "a DMV for mythological creatures",
+  "a talking revolving door", "a bathtub adrift at sea",
+];
+
+type Pool = { subjects: readonly string[]; settings: readonly string[] };
+
+const POOLS: Record<PackId, Pool> = {
+  mixed: { subjects: SUBJECTS, settings: SETTINGS },
+  food: { subjects: FOOD_SUBJECTS, settings: FOOD_SETTINGS },
+  wildlife: { subjects: WILDLIFE_SUBJECTS, settings: WILDLIFE_SETTINGS },
+  history: { subjects: HISTORY_SUBJECTS, settings: HISTORY_SETTINGS },
+  absurd: { subjects: ABSURD_SUBJECTS, settings: ABSURD_SETTINGS },
+};
+
+export const PACK_LABELS: Record<PackId, { title: string; blurb: string; emoji: string }> = {
+  mixed: { title: "Mixed", blurb: "A bit of everything", emoji: "🎲" },
+  food: { title: "Food", blurb: "Kitchens, feasts, cravings", emoji: "🍜" },
+  wildlife: { title: "Wildlife", blurb: "Critters in their element", emoji: "🦦" },
+  history: { title: "History", blurb: "Figures and places through time", emoji: "📜" },
+  absurd: { title: "Absurd", blurb: "Surreal and silly", emoji: "🎩" },
+};
+
+export const PACK_IDS: PackId[] = ["mixed", "food", "wildlife", "history", "absurd"];
+
 export function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export function sampleDimensions() {
+export function sampleDimensions(opts: { pack?: PackId } = {}) {
+  const pack = opts.pack && POOLS[opts.pack] ? opts.pack : "mixed";
+  const pool = POOLS[pack];
   return {
-    subject: pickRandom(SUBJECTS),
-    setting: pickRandom(SETTINGS),
+    subject: pickRandom(pool.subjects),
+    setting: pickRandom(pool.settings),
     action: pickRandom(ACTIONS),
     time: pickRandom(TIMES),
     style: pickRandom(STYLES),

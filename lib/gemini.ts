@@ -1,11 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { serverEnv } from "@/lib/env";
-import { sampleDimensions } from "@/lib/prompt-dimensions";
+import { sampleDimensions, type PackId } from "@/lib/prompt-dimensions";
 
 const ai = new GoogleGenAI({ apiKey: serverEnv!.GOOGLE_GENAI_API_KEY! });
 
-function buildAuthorInstruction(previousPrompts: string[] = []) {
-  const { subject, setting, action, time, style } = sampleDimensions();
+function buildAuthorInstruction(
+  previousPrompts: string[] = [],
+  pack: PackId = "mixed",
+) {
+  const { subject, setting, action, time, style } = sampleDimensions({ pack });
   const avoid =
     previousPrompts.length > 0
       ? `\n\nAlready used this game (pick different specifics):\n${previousPrompts
@@ -34,6 +37,7 @@ Tokenize the prompt word-by-word in reading order. Every word of your prompt mus
 
 export async function authorPromptWithRoles(
   previousPrompts: string[] = [],
+  pack: PackId = "mixed",
 ): Promise<{
   prompt: string;
   tokens: Array<{
@@ -43,7 +47,7 @@ export async function authorPromptWithRoles(
 }> {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: buildAuthorInstruction(previousPrompts),
+    contents: buildAuthorInstruction(previousPrompts, pack),
     config: {
       temperature: 1.2,
       responseMimeType: "application/json",

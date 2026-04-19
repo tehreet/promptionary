@@ -22,6 +22,15 @@ export async function createRoomAction(formData: FormData) {
       ? rawMode
       : "party";
 
+  const rawPack = String(formData.get("pack") ?? "mixed");
+  const pack =
+    rawPack === "food" ||
+    rawPack === "wildlife" ||
+    rawPack === "history" ||
+    rawPack === "absurd"
+      ? rawPack
+      : "mixed";
+
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("create_room", {
     p_display_name: displayName,
@@ -29,6 +38,7 @@ export async function createRoomAction(formData: FormData) {
     p_max_rounds: intOrNull("maxRounds"),
     p_guess_seconds: intOrNull("guessSeconds"),
     p_reveal_seconds: intOrNull("revealSeconds"),
+    p_pack: pack,
   });
   if (error) throw error;
   const row = data?.[0];

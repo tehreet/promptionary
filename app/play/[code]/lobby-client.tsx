@@ -10,12 +10,15 @@ import { InviteCard } from "./invite-card";
 import { RoomChannelProvider } from "@/lib/room-channel";
 import { ChatPanel } from "@/components/chat-panel";
 import { HostControls } from "@/components/host-controls";
+import { PACK_LABELS, type PackId } from "@/lib/prompt-dimensions";
 
 type Room = {
   id: string;
   code: string;
   phase: string;
   host_id: string;
+  mode?: string;
+  pack?: PackId;
   max_rounds: number;
   guess_seconds: number;
   round_num: number;
@@ -180,6 +183,21 @@ function LobbyClientInner({
       </header>
 
       <InviteCard code={room.code} />
+
+      {room.mode !== "artist" && room.pack && (
+        <div
+          data-pack={room.pack}
+          className="inline-flex items-center gap-2 rounded-full bg-card border border-border px-4 py-1.5 shadow-sm text-sm"
+        >
+          <span className="text-base leading-none">
+            {PACK_LABELS[room.pack].emoji}
+          </span>
+          <span className="text-xs uppercase tracking-widest text-muted-foreground">
+            Pack
+          </span>
+          <span className="font-bold">{PACK_LABELS[room.pack].title}</span>
+        </div>
+      )}
 
       <section className="w-full max-w-2xl space-y-3">
         <h2 className="text-lg font-heading font-black text-foreground/80">

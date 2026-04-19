@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
   const { data: room } = await svc
     .from("rooms")
-    .select("id, host_id, mode, guess_seconds, phase")
+    .select("id, host_id, mode, guess_seconds, phase, pack")
     .eq("id", round.room_id)
     .maybeSingle();
   if (!room)
@@ -77,7 +77,10 @@ export async function POST(req: Request) {
       const previousPrompts = (recentRounds ?? [])
         .map((r) => r.prompt)
         .filter((p): p is string => !!p);
-      ({ prompt, tokens } = await authorPromptWithRoles(previousPrompts));
+      ({ prompt, tokens } = await authorPromptWithRoles(
+        previousPrompts,
+        room.pack ?? "mixed",
+      ));
     }
     pngBuffer = await generateImagePng(prompt);
   } catch (e) {

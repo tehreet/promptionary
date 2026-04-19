@@ -7,11 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createRoomAction } from "@/app/actions/create-room";
 import { randomDisplayName } from "@/lib/player";
+import { PACK_IDS, PACK_LABELS, type PackId } from "@/lib/prompt-dimensions";
 
 export function CreateRoomCard() {
   const initialName = useMemo(() => randomDisplayName(), []);
   const [advanced, setAdvanced] = useState(false);
   const [mode, setMode] = useState<"party" | "artist">("party");
+  const [pack, setPack] = useState<PackId>("mixed");
   return (
     <Card className="w-full max-w-sm bg-card/90 backdrop-blur border-border shadow-xl rounded-3xl">
       <CardHeader>
@@ -50,6 +52,41 @@ export function CreateRoomCard() {
               />
             </div>
           </div>
+
+          <input type="hidden" name="pack" value={pack} />
+          {mode === "party" && (
+            <div className="space-y-1.5">
+              <Label>Theme pack</Label>
+              <div
+                role="radiogroup"
+                aria-label="Theme pack"
+                className="flex flex-wrap gap-1.5"
+              >
+                {PACK_IDS.map((p) => {
+                  const meta = PACK_LABELS[p];
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      role="radio"
+                      aria-checked={pack === p}
+                      data-pack={p}
+                      onClick={() => setPack(p)}
+                      title={meta.blurb}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold border transition ${
+                        pack === p
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "bg-card border-border hover:bg-muted"
+                      }`}
+                    >
+                      <span className="mr-1">{meta.emoji}</span>
+                      {meta.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <button
             type="button"

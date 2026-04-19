@@ -20,7 +20,7 @@ export default async function LobbyPage({
   const { data: room, error } = await supabase
     .from("rooms")
     .select(
-      "id, code, phase, host_id, mode, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
+      "id, code, phase, host_id, mode, pack, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
     )
     .eq("code", code)
     .maybeSingle();
