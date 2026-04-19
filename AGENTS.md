@@ -10,12 +10,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 Multiplayer AI party game — Pictionary in reverse. Gemini paints from a secret prompt, players guess. Live at https://promptionary.io (apex) and https://promptionary-three.vercel.app (Vercel alias).
 
-Two modes:
+Two core modes + a teams overlay:
 
 - **Party** — Gemini 2.5 Flash authors the secret prompt (5-dimension random seeding + avoid-recent context). Gemini 3.1 Flash Image Preview renders it. Players guess; scored by role-weighted token match (subject / style) + semantic similarity + speed bonus. Optional theme packs (food / wildlife / history / absurd / mixed) filter the subject/setting pools.
-- **Artist** — one player per round writes the prompt; everyone else guesses. Artist's score = average of the guessers' totals. Rotation by join order.
+- **Artist** — one player per round writes the prompt; everyone else guesses. Artist's score = average of the guessers' totals. Artist is picked by least-artist-count with random tiebreak (not join order).
+- **Teams** — a host-only lobby toggle (`rooms.teams_enabled` boolean, orthogonal to `mode`). Works on top of either Party or Artist. Players auto-seed into Team 1 / Team 2; host can swap or auto-balance. Final leaderboard ranks by **average** of each team's individual totals.
 
-Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, running scoreboard, inter-round chat (DB-level phase blackout), live cursors, emoji reactions, sound effects (submit / image-land / winner cheer), flipboard prompt recap with role-colored tokens + top-guess callout, host-only kick / transfer-host controls, solo Daily puzzle at `/daily` with global leaderboard and share card — all shipped.
+Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, running scoreboard, inter-round chat (DB-level phase blackout), live cursors, emoji reactions, sound effects (submit / image-land / winner cheer), flipboard prompt recap with role-colored tokens + top-guess callout, host-only kick / transfer-host controls, solo Daily puzzle at `/daily` with global leaderboard and share card, sign-in (magic link + Google + Discord + passkeys via SimpleWebAuthn) — all shipped.
 
 ## Tech stack
 
@@ -31,7 +32,8 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 
 - **All AI calls live in Vercel route handlers**, never the client. Keys via env.
 - **Anonymous auth is created in `middleware.ts`** on first visit. Server components can't set cookies; middleware can. Without this, invite-link visitors get stuck.
-- **Realtime plumbing uses public channels + 2s polling fallback.** Attempted private-channel + realtime.messages RLS for proper postgres_changes delivery — got `CHANNEL_ERROR` with no message even on permissive setups. Rabbit hole; deferred.
+- **Realtime plumbing uses public channels + 2s polling fallback.** Attempted private-channel + realtime.messages RLS for proper postgres_changes delivery — got `CHANNEL_ERROR` with no message even on permissive setups. Migrations for the private-channel path exist (see `20260419052512_realtime_private_channels.sql`) but are disabled in practice; all live updates ride public broadcast + poll backstop.
+- **Browser Supabase client bypasses `@supabase/ssr` for data.** `createSupabaseBrowserClient` uses vanilla `@supabase/supabase-js` with the session JWT bridged in from middleware-set cookies; `@supabase/ssr`'s browser `getSession()` hangs silently and stalls every data call. Auth flows (sign-in card, user menu) still use `createSupabaseAuthBrowserClient` for PKCE cookie writes.
 - **Broadcast on public channels works fine.** Cursors, chat live-delivery, and reactions ride the `room-<id>-live` channel via `RoomChannelProvider`.
 - **Phase transitions are host-driven from the client.** No pg_cron. The host's tab POSTs to `/api/start-round` and `/api/finalize-round`. Auto-finalize fires when everyone submits (not just on timer expiry). Reveal-advance trigger guards on `phase_ends_at < now()` — not `remaining == 0` which is ambiguous.
 - **Replica identity FULL** on all gameplay tables for Realtime streaming. `supabase_realtime` publication includes rooms / room_players / rounds / guesses / room_messages.
@@ -50,12 +52,18 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 - `app/api/finalize-round/route.ts` — batched embeddings + per-guess scoring + aggregate score bump + phase advance. Artist gets `avg(guessers)` added to their total
 - `app/api/submit-artist-prompt/route.ts` — validates the artist, writes their prompt, runs the image pipeline
 - `lib/gemini.ts` — 5-dimension prompt author (`buildAuthorInstruction`), `tagPromptRoles` (for artist mode), `generateImagePng` (fallback chain), `embedTexts`
-- `lib/prompt-dimensions.ts` — subject / setting / action / time / style pools
+- `lib/prompt-dimensions.ts` — subject / setting / action / time / style pools, pack-scoped
 - `lib/scoring.ts` — pure scoring math, no DB
 - `lib/room-channel.tsx` — broadcast channel React context
 - `lib/animation.ts` — `useAnimatedNumber` (easeOutCubic count-up)
 - `lib/env.ts` — Zod-validated env vars
-- `lib/supabase/{client,server,types}.ts` — SSR-aware Supabase clients. Types are generated, don't hand-edit
+- `lib/sfx.ts` — Web Audio synth for submit / image-land / winner-cheer / reveal, with `window.__sfx` test hook
+- `lib/loading-phrases.ts` — rotating spinner phrases during `generating` phase
+- `lib/daily.ts` — daily puzzle seeding + global leaderboard helpers (`ensureDailyPuzzle`, `todayUtcDate`)
+- `lib/passkey.ts` — SimpleWebAuthn RP ID + challenge-cookie constants
+- `lib/profile.ts` — `getCurrentProfile` used by the async root layout for first-paint auth state
+- `lib/player.ts` — `colorForPlayer` + player chip helpers
+- `lib/supabase/{client,server,types}.ts` — vanilla supabase-js for data, `@supabase/ssr` only for auth. Types are generated, don't hand-edit
 - `components/live-cursors.tsx` — pointer overlay
 - `components/chat-panel.tsx` — inline + floating variants
 - `components/reactions-bar.tsx` — emoji bar + floating overlay
@@ -79,8 +87,10 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 
 - **Every user-visible feature gets an e2e test.** Don't claim "it works" on a UI change without running Playwright.
 - Tests live in `tests/e2e/`. Helpers in `tests/e2e/helpers.ts` (`createRoomAs`, `joinRoomAs`, `submitGuess`).
-- Current coverage (all green, 17 tests against prod):
+- Current coverage (all green against prod):
   - `artist-mode.spec.ts` — artist writes prompt, others guess, score award
+  - `artist-teams.spec.ts` — artist mode + teams toggle coexist; team leaderboard at game over
+  - `auth.spec.ts` — Google / Discord / magic-link sign-in UI + redirect flow
   - `auto-submit.spec.ts` — typed-but-not-clicked guess fires on timer expiry
   - `chat.spec.ts` — two-player lobby chat roundtrip
   - `create-and-join.spec.ts` — baseline lobby flow
@@ -88,12 +98,15 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
   - `full-round.spec.ts` — 2-player single round with Gemini
   - `host-controls.spec.ts` — host kicks a player + transfers host
   - `invite-link.spec.ts` — opening `/play/<code>` as a fresh visitor
+  - `loading-phrases.spec.ts` — rotating spinner phrases during `generating`
   - `multi-round.spec.ts` — 3 players, 2 rounds, everyone-submitted finalize, scoreboard rollover
+  - `passkey.spec.ts` — SimpleWebAuthn sign-in using a Chromium virtual authenticator
   - `play-again.spec.ts` — game-over → reset → second game
   - `realtime-lobby.spec.ts` — host sees joiner within a few seconds
   - `recap.spec.ts` — flipboard tokens render with role classes, top-guess callout visible
   - `sfx.spec.ts` — mute toggle works, submit/imageLand/winnerCheer sfx fire
   - `spectator.spec.ts` — mid-game visitor joins as watch-only
+  - `teams.spec.ts` — host flips teams toggle; 4 players split into teams; team leaderboard
   - `theme-packs.spec.ts` — pack selector propagates to lobby pill; artist mode hides it
 - Tests create throwaway rooms each run. No cleanup step is needed.
 - Supabase's free-tier anon-auth rate limit bites when running >3 workers. Prefer `--workers=2` locally; prod is fine at default parallelism because tests run less often.
@@ -111,7 +124,7 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 - **CLI PATH**: `supabase` is at `/home/linuxbrew/.linuxbrew/bin/supabase`, `bun` + `vercel` at `$HOME/.bun/bin/`. Scripts that shell out should `export PATH="/home/linuxbrew/.linuxbrew/bin:$HOME/.bun/bin:$PATH"` explicitly.
 - **Regen types after every migration** or TS will break on new columns/functions.
 - **Enum extensions need two migrations**: one to `ADD VALUE`, a separate one to use it. Postgres won't let you use a new enum value in the same transaction it was added.
-- **SECURITY DEFINER return tables**: don't name the returned columns the same as underlying table columns. Shadowing triggers 42702 "ambiguous column" errors. Prefix with `new_` or `out_` (see `create_room` → `new_room_id`, `new_code`).
+- **SECURITY DEFINER return tables**: don't name the returned columns the same as underlying table columns. Shadowing triggers 42702 "ambiguous column" errors. Rename columns in the `returns table (...)` clause (the `create_room` RPC's fix in `20260419021009_fix_create_room_ambiguous.sql` is the canonical example).
 - **Playwright + controlled inputs**: React controlled `<input value>` fights Playwright's `fill()`. Use `defaultValue` for initial values and let the browser own the input state.
 - **Always run `bun run build` before claiming a change works.** TS errors will bite you later.
 - **Never disable RLS on `realtime.messages`** arbitrarily — breaks public channels for reasons I didn't fully diagnose.
@@ -128,12 +141,12 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 
 ## Deferred / known backlog
 
-- Proper Realtime via private channels + `realtime.messages` RLS (CHANNEL_ERROR rabbit hole)
-- Teams mode (enum slot `'teams'` exists; no gameplay)
-- Sign-in accounts (Google / Discord / Sign in with Vercel)
+- Proper Realtime via private channels + `realtime.messages` RLS (CHANNEL_ERROR rabbit hole; migrations exist, disabled)
+- Sign in with Vercel as an OAuth provider
 - pg_cron tick as a disconnection safety net for phase transitions
 - Rate limits on room creation
 - Moderation pass on artist-mode prompts
 - PWA manifest
+- `room_mode` enum still carries legacy `'teams'` and `'headsup'` slots that no code writes anymore — safe to drop in a future migration once we're sure no historical rows remain.
 
 **All features ship with e2e tests.** Write the test alongside the feature; don't treat it as a follow-up.

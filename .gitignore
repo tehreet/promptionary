@@ -45,3 +45,7 @@ supabase/.branches
 next-env.d.ts
 test-results/
 playwright-report/
+
+# Claude Code session scratch / worktrees
+.claude/worktrees/
+.claude/scheduled_tasks.lock

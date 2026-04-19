@@ -17,10 +17,7 @@ export async function createRoomAction(formData: FormData) {
   };
 
   const rawMode = String(formData.get("mode") ?? "party");
-  const mode =
-    rawMode === "artist" || rawMode === "teams" || rawMode === "headsup"
-      ? rawMode
-      : "party";
+  const mode = rawMode === "artist" ? "artist" : "party";
 
   const rawPack = String(formData.get("pack") ?? "mixed");
   const pack =

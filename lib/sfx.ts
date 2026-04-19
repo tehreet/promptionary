@@ -151,15 +151,6 @@ export function playWinnerCheer(): void {
   });
 }
 
-export function playRoundStart(): void {
-  logCall("roundStart");
-  if (muted) return;
-  const c = getCtx();
-  if (!c) return;
-  const now = c.currentTime;
-  tone(c, 523.25, now, 0.1, { type: "sine", gain: 0.12 });
-}
-
 export function playReveal(): void {
   logCall("reveal");
   if (muted) return;
