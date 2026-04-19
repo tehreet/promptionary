@@ -779,15 +779,15 @@ function GameClientInner({
             </LiveCursorsOverlay>
           )}
           {isSpectator ? (
-            <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-4 text-center">
+            <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
               <p className="font-bold">Spectating — guesses are hidden until reveal.</p>
             </div>
           ) : iAmArtist ? (
-            <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-4 text-center">
+            <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
               <p className="font-bold">You wrote this one — watch the guesses come in ✨</p>
             </div>
           ) : guessSubmitted ? (
-            <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-4 text-center">
+            <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
               <p className="font-bold">Guess in! Waiting on the rest…</p>
             </div>
           ) : (
@@ -1011,7 +1011,7 @@ function GuessRow({
       className={`rounded-2xl px-3 sm:px-4 py-3 border flex items-start gap-3 sm:gap-4 shadow-sm ${
         isTop
           ? "bg-accent border-[color:var(--game-pink)]/60 ring-2 ring-[color:var(--game-pink)]/40"
-          : "bg-card border-border"
+          : "bg-card text-card-foreground border-border"
       }`}
     >
       <span className="w-5 sm:w-6 text-center font-black text-muted-foreground pt-0.5 text-sm sm:text-base">
