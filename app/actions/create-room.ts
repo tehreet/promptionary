@@ -4,38 +4,21 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureAnonSession } from "./auth";
 
+// One-click create. The home-page form only collects the display name —
+// mode / pack / timing all move to the host-only lobby settings panel.
 export async function createRoomAction(formData: FormData) {
   await ensureAnonSession();
   const displayName = String(formData.get("displayName") ?? "").trim();
   if (!displayName) throw new Error("display name required");
 
-  const intOrNull = (name: string) => {
-    const raw = formData.get(name);
-    if (raw == null || raw === "") return null;
-    const n = Number(raw);
-    return Number.isFinite(n) ? Math.trunc(n) : null;
-  };
-
-  const rawMode = String(formData.get("mode") ?? "party");
-  const mode = rawMode === "artist" ? "artist" : "party";
-
-  const rawPack = String(formData.get("pack") ?? "mixed");
-  const pack =
-    rawPack === "food" ||
-    rawPack === "wildlife" ||
-    rawPack === "history" ||
-    rawPack === "absurd"
-      ? rawPack
-      : "mixed";
-
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("create_room", {
     p_display_name: displayName,
-    p_mode: mode,
-    p_max_rounds: intOrNull("maxRounds"),
-    p_guess_seconds: intOrNull("guessSeconds"),
-    p_reveal_seconds: intOrNull("revealSeconds"),
-    p_pack: pack,
+    p_mode: "party",
+    p_pack: "mixed",
+    p_max_rounds: 5,
+    p_guess_seconds: 45,
+    p_reveal_seconds: 20,
   });
   if (error) throw error;
   const row = data?.[0];

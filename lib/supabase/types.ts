@@ -286,6 +286,7 @@ export type Database = {
           id: string
           player_id: string
           room_id: string
+          team: number | null
         }
         Insert: {
           content: string
@@ -294,6 +295,7 @@ export type Database = {
           id?: string
           player_id: string
           room_id: string
+          team?: number | null
         }
         Update: {
           content?: string
@@ -302,6 +304,7 @@ export type Database = {
           id?: string
           player_id?: string
           room_id?: string
+          team?: number | null
         }
         Relationships: [
           {
@@ -585,7 +588,7 @@ export type Database = {
         Returns: undefined
       }
       post_message: {
-        Args: { p_content: string; p_room_id: string }
+        Args: { p_content: string; p_room_id: string; p_team?: number }
         Returns: string
       }
       promote_anon_for_passkey: {
@@ -612,6 +615,17 @@ export type Database = {
       }
       transfer_host: {
         Args: { p_new_host_id: string; p_room_id: string }
+        Returns: undefined
+      }
+      update_room_settings: {
+        Args: {
+          p_guess_seconds?: number
+          p_max_rounds?: number
+          p_mode?: Database["public"]["Enums"]["room_mode"]
+          p_pack?: Database["public"]["Enums"]["room_pack"]
+          p_reveal_seconds?: number
+          p_room_id: string
+        }
         Returns: undefined
       }
     }
