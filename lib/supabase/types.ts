@@ -14,6 +14,120 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_guesses: {
+        Row: {
+          date: string
+          display_name: string
+          guess: string
+          id: string
+          player_id: string
+          semantic_score: number
+          style_score: number
+          subject_score: number
+          submitted_at: string
+          total_score: number | null
+        }
+        Insert: {
+          date: string
+          display_name: string
+          guess: string
+          id?: string
+          player_id: string
+          semantic_score?: number
+          style_score?: number
+          subject_score?: number
+          submitted_at?: string
+          total_score?: number | null
+        }
+        Update: {
+          date?: string
+          display_name?: string
+          guess?: string
+          id?: string
+          player_id?: string
+          semantic_score?: number
+          style_score?: number
+          subject_score?: number
+          submitted_at?: string
+          total_score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_guesses_date_fkey"
+            columns: ["date"]
+            isOneToOne: false
+            referencedRelation: "daily_prompts"
+            referencedColumns: ["date"]
+          },
+          {
+            foreignKeyName: "daily_guesses_date_fkey"
+            columns: ["date"]
+            isOneToOne: false
+            referencedRelation: "daily_puzzle"
+            referencedColumns: ["date"]
+          },
+        ]
+      }
+      daily_prompt_tokens: {
+        Row: {
+          date: string
+          position: number
+          role: Database["public"]["Enums"]["token_role"]
+          token: string
+        }
+        Insert: {
+          date: string
+          position: number
+          role: Database["public"]["Enums"]["token_role"]
+          token: string
+        }
+        Update: {
+          date?: string
+          position?: number
+          role?: Database["public"]["Enums"]["token_role"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_prompt_tokens_date_fkey"
+            columns: ["date"]
+            isOneToOne: false
+            referencedRelation: "daily_prompts"
+            referencedColumns: ["date"]
+          },
+          {
+            foreignKeyName: "daily_prompt_tokens_date_fkey"
+            columns: ["date"]
+            isOneToOne: false
+            referencedRelation: "daily_puzzle"
+            referencedColumns: ["date"]
+          },
+        ]
+      }
+      daily_prompts: {
+        Row: {
+          created_at: string
+          date: string
+          image_storage_path: string | null
+          image_url: string | null
+          prompt: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          image_storage_path?: string | null
+          image_url?: string | null
+          prompt?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          image_storage_path?: string | null
+          image_url?: string | null
+          prompt?: string
+        }
+        Relationships: []
+      }
       guesses: {
         Row: {
           guess: string
@@ -274,6 +388,24 @@ export type Database = {
       }
     }
     Views: {
+      daily_puzzle: {
+        Row: {
+          created_at: string | null
+          date: string | null
+          image_url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string | null
+          image_url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string | null
+          image_url?: string | null
+        }
+        Relationships: []
+      }
       rounds_public: {
         Row: {
           artist_player_id: string | null

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CreateRoomCard } from "@/components/create-room-card";
 import { JoinRoomCard } from "@/components/join-room-card";
 
@@ -32,6 +33,29 @@ export default function Home() {
       <section className="flex flex-col md:flex-row gap-5 w-full max-w-3xl items-stretch justify-center">
         <CreateRoomCard />
         <JoinRoomCard />
+      </section>
+
+      <section className="w-full max-w-3xl">
+        <Link
+          href="/daily"
+          data-daily-cta="1"
+          className="group flex items-center justify-between gap-4 rounded-3xl bg-card/90 backdrop-blur border border-border px-6 py-5 shadow-sm hover:shadow-md transition"
+        >
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Solo
+            </p>
+            <p className="text-xl sm:text-2xl font-heading font-black">
+              Play today&rsquo;s Daily puzzle
+            </p>
+            <p className="text-sm text-muted-foreground">
+              One shared image. One guess. Global leaderboard resets at midnight UTC.
+            </p>
+          </div>
+          <span className="text-3xl shrink-0 group-hover:translate-x-1 transition-transform">
+            →
+          </span>
+        </Link>
       </section>
 
       <section className="w-full max-w-4xl grid gap-5 md:grid-cols-3">
