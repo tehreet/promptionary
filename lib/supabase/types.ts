@@ -403,6 +403,7 @@ export type Database = {
       }
       rooms: {
         Row: {
+          blitz: boolean
           code: string
           created_at: string
           guess_seconds: number
@@ -418,6 +419,7 @@ export type Database = {
           teams_enabled: boolean
         }
         Insert: {
+          blitz?: boolean
           code: string
           created_at?: string
           guess_seconds?: number
@@ -433,6 +435,7 @@ export type Database = {
           teams_enabled?: boolean
         }
         Update: {
+          blitz?: boolean
           code?: string
           created_at?: string
           guess_seconds?: number
@@ -529,6 +532,42 @@ export type Database = {
           },
         ]
       }
+      spectator_votes: {
+        Row: {
+          created_at: string
+          round_id: string
+          spectator_id: string
+          voted_player_id: string
+        }
+        Insert: {
+          created_at?: string
+          round_id: string
+          spectator_id: string
+          voted_player_id: string
+        }
+        Update: {
+          created_at?: string
+          round_id?: string
+          spectator_id?: string
+          voted_player_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spectator_votes_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spectator_votes_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       daily_puzzle: {
@@ -584,6 +623,10 @@ export type Database = {
       }
       bump_round_stats: {
         Args: { p_player_id: string; p_round_total: number }
+        Returns: undefined
+      }
+      cast_spectator_vote: {
+        Args: { p_round_id: string; p_voted_player_id: string }
         Returns: undefined
       }
       count_round_guesses: { Args: { p_round_id: string }; Returns: number }
@@ -647,6 +690,10 @@ export type Database = {
         Returns: undefined
       }
       realtime_topic_room: { Args: { topic: string }; Returns: string }
+      resolve_spectator_votes: {
+        Args: { p_round_id: string }
+        Returns: undefined
+      }
       set_player_spectator: {
         Args: {
           p_is_spectator: boolean
@@ -679,6 +726,7 @@ export type Database = {
       }
       update_room_settings: {
         Args: {
+          p_blitz?: boolean
           p_guess_seconds?: number
           p_max_rounds?: number
           p_mode?: Database["public"]["Enums"]["room_mode"]

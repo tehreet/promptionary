@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const { data: room } = await svc
     .from("rooms")
     .select(
-      "id, host_id, phase, round_num, max_rounds, reveal_seconds, guess_seconds, phase_ends_at",
+      "id, host_id, phase, round_num, max_rounds, reveal_seconds, guess_seconds, phase_ends_at, blitz",
     )
     .eq("id", round.room_id)
     .maybeSingle();
@@ -104,6 +104,7 @@ export async function POST(req: Request) {
       submittedAt: new Date(g.submitted_at),
       phaseStartedAt,
       guessSeconds: room.guess_seconds,
+      blitz: room.blitz ?? false,
     });
     const total =
       breakdown.subject_score +

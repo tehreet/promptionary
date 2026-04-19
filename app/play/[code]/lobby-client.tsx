@@ -26,6 +26,7 @@ type Room = {
   guess_seconds: number;
   reveal_seconds: number;
   round_num: number;
+  blitz?: boolean;
 };
 
 type Player = {
@@ -105,6 +106,7 @@ function LobbyClientInner({
   const [revealSeconds, setRevealSeconds] = useState<number>(
     room.reveal_seconds,
   );
+  const [blitzOn, setBlitzOn] = useState<boolean>(!!room.blitz);
   const isHost = hostId === currentPlayerId;
 
   useEffect(() => {
@@ -173,6 +175,7 @@ function LobbyClientInner({
             max_rounds?: number;
             guess_seconds?: number;
             reveal_seconds?: number;
+            blitz?: boolean;
           };
           setPhase(next.phase);
           if (next.host_id) setHostId(next.host_id);
@@ -182,6 +185,7 @@ function LobbyClientInner({
           if (typeof next.max_rounds === "number") setMaxRounds(next.max_rounds);
           if (typeof next.guess_seconds === "number") setGuessSeconds(next.guess_seconds);
           if (typeof next.reveal_seconds === "number") setRevealSeconds(next.reveal_seconds);
+          if (typeof next.blitz === "boolean") setBlitzOn(next.blitz);
         },
       )
       .subscribe();
@@ -198,7 +202,7 @@ function LobbyClientInner({
       const { data: r } = await supabase
         .from("rooms")
         .select(
-          "phase, host_id, teams_enabled, mode, pack, max_rounds, guess_seconds, reveal_seconds",
+          "phase, host_id, teams_enabled, mode, pack, max_rounds, guess_seconds, reveal_seconds, blitz",
         )
         .eq("id", room.id)
         .maybeSingle();
@@ -210,6 +214,7 @@ function LobbyClientInner({
       if (typeof r?.max_rounds === "number") setMaxRounds(r.max_rounds);
       if (typeof r?.guess_seconds === "number") setGuessSeconds(r.guess_seconds);
       if (typeof r?.reveal_seconds === "number") setRevealSeconds(r.reveal_seconds);
+      if (typeof r?.blitz === "boolean") setBlitzOn(r.blitz);
     }, 2000);
 
     return () => {
@@ -269,6 +274,7 @@ function LobbyClientInner({
       p_max_rounds: number;
       p_guess_seconds: number;
       p_reveal_seconds: number;
+      p_blitz: boolean;
     }>,
   ) {
     const supabase = createSupabaseBrowserClient();
@@ -298,6 +304,30 @@ function LobbyClientInner({
     } catch (e) {
       setPack(prev);
       alert(e instanceof Error ? e.message : "failed to change pack");
+    }
+  }
+
+  // Blitz toggle. When enabling and the guess timer is still at the default
+  // 45s, nudge it down to 22 so the variant actually feels like blitz. We
+  // don't stomp custom values — if the host already picked something else
+  // they keep it. Both settings go in a single RPC call.
+  async function handleSetBlitz(next: boolean) {
+    const prev = blitzOn;
+    const prevGuess = guessSeconds;
+    const shouldNudge = next && guessSeconds === 45;
+    const nextGuess = shouldNudge ? 22 : guessSeconds;
+    setBlitzOn(next);
+    if (shouldNudge) setGuessSeconds(nextGuess);
+    try {
+      await applySettings(
+        shouldNudge
+          ? { p_blitz: next, p_guess_seconds: nextGuess }
+          : { p_blitz: next },
+      );
+    } catch (e) {
+      setBlitzOn(prev);
+      if (shouldNudge) setGuessSeconds(prevGuess);
+      alert(e instanceof Error ? e.message : "failed to toggle blitz");
     }
   }
 
@@ -486,26 +516,48 @@ function LobbyClientInner({
 
       <InviteCard code={room.code} />
 
-      {mode !== "artist" && pack && (
-        <div
-          data-pack={pack}
-          className="sticker inline-flex items-center gap-2"
-          style={
-            {
-              ["--sticker-tilt" as string]: "-2deg",
-              background: "var(--game-cyan)",
-            } as React.CSSProperties
-          }
-        >
-          <span className="text-base leading-none">
-            {PACK_LABELS[pack].emoji}
-          </span>
-          <span className="text-[10px] uppercase tracking-widest opacity-70">
-            Pack
-          </span>
-          <span className="font-bold">{PACK_LABELS[pack].title}</span>
+      {(mode !== "artist" && pack) || blitzOn ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {mode !== "artist" && pack && (
+            <div
+              data-pack={pack}
+              className="sticker inline-flex items-center gap-2"
+              style={
+                {
+                  ["--sticker-tilt" as string]: "-2deg",
+                  background: "var(--game-cyan)",
+                } as React.CSSProperties
+              }
+            >
+              <span className="text-base leading-none">
+                {PACK_LABELS[pack].emoji}
+              </span>
+              <span className="text-[10px] uppercase tracking-widest opacity-70">
+                Pack
+              </span>
+              <span className="font-bold">{PACK_LABELS[pack].title}</span>
+            </div>
+          )}
+          {blitzOn && (
+            <div
+              data-blitz-badge="1"
+              className="sticker inline-flex items-center gap-2"
+              style={
+                {
+                  ["--sticker-tilt" as string]: "2deg",
+                  background: "var(--game-canvas-yellow)",
+                } as React.CSSProperties
+              }
+            >
+              <span className="text-base leading-none">⚡</span>
+              <span className="text-[10px] uppercase tracking-widest opacity-70">
+                Variant
+              </span>
+              <span className="font-bold">Blitz</span>
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
 
       {isHost && phase === "lobby" && (
         <section
@@ -616,6 +668,32 @@ function LobbyClientInner({
               onCommit={(v) => clampAndSave("reveal_seconds", v)}
             />
           </div>
+
+          {/* Blitz toggle — halves the default timer, doubles the speed bonus. */}
+          <label
+            data-blitz-toggle="1"
+            className="flex items-center gap-3 rounded-xl border-2 px-3 py-2 cursor-pointer select-none transition"
+            style={{
+              borderColor: "var(--game-ink)",
+              background: blitzOn
+                ? "var(--game-canvas-yellow)"
+                : "var(--game-paper)",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={blitzOn}
+              onChange={(e) => handleSetBlitz(e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            <span className="text-base leading-none">⚡</span>
+            <span className="flex-1">
+              <span className="text-sm font-black block">Blitz mode</span>
+              <span className="text-[11px] opacity-80">
+                Half the timer, double the speed bonus.
+              </span>
+            </span>
+          </label>
         </section>
       )}
 
