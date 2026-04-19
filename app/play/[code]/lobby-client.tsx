@@ -32,6 +32,7 @@ type Player = {
   player_id: string;
   display_name: string;
   is_host: boolean;
+  is_spectator?: boolean;
   score: number;
   team?: number | null;
 };
@@ -48,6 +49,12 @@ const TEAM_META: Record<1 | 2, { label: string; color: string; bg: string }> = {
     bg: "color-mix(in oklab, var(--game-cyan) 22%, var(--game-paper))",
   },
 };
+
+// Drop-zone targets for drag-and-drop team / spectator assignment.
+type DropZone = "team-1" | "team-2" | "spectators" | "unassigned";
+
+// Native HTML5 DnD mime type we stuff the player_id into.
+const DND_PLAYER_MIME = "application/x-promptionary-player";
 
 export function LobbyClient(props: {
   room: Room;
@@ -185,7 +192,7 @@ function LobbyClientInner({
     const poll = setInterval(async () => {
       const { data } = await supabase
         .from("room_players")
-        .select("player_id, display_name, is_host, score, team")
+        .select("player_id, display_name, is_host, is_spectator, score, team")
         .eq("room_id", room.id);
       if (data) setPlayers(data as Player[]);
       const { data: r } = await supabase
@@ -321,26 +328,147 @@ function LobbyClientInner({
 
   async function handleSwapTeam(playerId: string, currentTeam: number | null) {
     const nextTeam = currentTeam === 1 ? 2 : 1;
-    const supabase = createSupabaseBrowserClient();
+    await movePlayer(playerId, nextTeam === 1 ? "team-1" : "team-2");
+  }
+
+  // Drop-target state for visual highlight while dragging.
+  const [dragOver, setDragOver] = useState<DropZone | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  // Single source of truth for "where did this player get dropped." Applies
+  // an optimistic update, fires the matching RPC, rolls back on error.
+  async function movePlayer(playerId: string, zone: DropZone) {
+    if (!isHost) return;
+    const victim = players.find((p) => p.player_id === playerId);
+    if (!victim) return;
+
+    // Self-demote guard matches the server — no point in a round-trip that's
+    // guaranteed to fail.
+    if (zone === "spectators" && playerId === hostId) {
+      alert("Host can't become a spectator. Transfer host first.");
+      return;
+    }
+
+    // No-op if the drop target matches current state.
+    const currentZone: DropZone = victim.is_spectator
+      ? "spectators"
+      : victim.team === 1
+        ? "team-1"
+        : victim.team === 2
+          ? "team-2"
+          : "unassigned";
+    if (currentZone === zone) return;
+
     const prev = players;
     setPlayers((list) =>
-      list.map((p) =>
-        p.player_id === playerId ? { ...p, team: nextTeam } : p,
-      ),
+      list.map((p) => {
+        if (p.player_id !== playerId) return p;
+        switch (zone) {
+          case "team-1":
+            return { ...p, team: 1, is_spectator: false };
+          case "team-2":
+            return { ...p, team: 2, is_spectator: false };
+          case "spectators":
+            return { ...p, team: null, is_spectator: true };
+          case "unassigned":
+            return { ...p, team: null, is_spectator: false };
+        }
+      }),
     );
-    const { error } = await supabase.rpc("set_player_team", {
-      p_room_id: room.id,
-      p_player_id: playerId,
-      p_team: nextTeam,
-    });
-    if (error) {
+
+    const supabase = createSupabaseBrowserClient();
+    try {
+      // If crossing the spectator boundary we always need set_player_spectator
+      // first (it also clears team on promote), then optionally set_player_team
+      // for the team-1 / team-2 cases.
+      const wasSpectator = victim.is_spectator === true;
+      if (zone === "spectators") {
+        const { error } = await supabase.rpc("set_player_spectator", {
+          p_room_id: room.id,
+          p_player_id: playerId,
+          p_is_spectator: true,
+        });
+        if (error) throw error;
+        return;
+      }
+
+      if (wasSpectator) {
+        const { error } = await supabase.rpc("set_player_spectator", {
+          p_room_id: room.id,
+          p_player_id: playerId,
+          p_is_spectator: false,
+        });
+        if (error) throw error;
+      }
+
+      // Teams need teams_enabled. If it's off, the team-1 / team-2 zones
+      // shouldn't be visible — but guard anyway.
+      if (zone === "team-1" || zone === "team-2") {
+        if (!teamsOn) return;
+        const { error } = await supabase.rpc("set_player_team", {
+          p_room_id: room.id,
+          p_player_id: playerId,
+          p_team: zone === "team-1" ? 1 : 2,
+        });
+        if (error) throw error;
+      } else if (zone === "unassigned") {
+        if (!teamsOn) return;
+        // null → clear team; relies on updated set_player_team migration.
+        const { error } = await supabase.rpc("set_player_team", {
+          p_room_id: room.id,
+          p_player_id: playerId,
+          // set_player_team accepts null to clear in the updated migration;
+          // the generated types insist on number so cast past them.
+          p_team: null as unknown as number,
+        });
+        if (error) throw error;
+      }
+    } catch (e) {
       setPlayers(prev);
-      alert(error.message);
+      alert(e instanceof Error ? e.message : "failed to move player");
     }
   }
 
-  const teamPlayers = (t: 1 | 2) => players.filter((p) => p.team === t);
-  const unassignedPlayers = players.filter((p) => p.team == null);
+  // Native DnD helpers. We stash the player_id twice — the custom mime type
+  // takes precedence but we fall back to text/plain for browsers that strip
+  // unknown types (older Safari).
+  function onChipDragStart(e: React.DragEvent, playerId: string) {
+    if (!isHost) return;
+    e.dataTransfer.setData(DND_PLAYER_MIME, playerId);
+    e.dataTransfer.setData("text/plain", playerId);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggingId(playerId);
+  }
+  function onChipDragEnd() {
+    setDraggingId(null);
+    setDragOver(null);
+  }
+  function onZoneDragOver(e: React.DragEvent, zone: DropZone) {
+    if (!isHost) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver((cur) => (cur === zone ? cur : zone));
+  }
+  function onZoneDragLeave(zone: DropZone) {
+    setDragOver((cur) => (cur === zone ? null : cur));
+  }
+  async function onZoneDrop(e: React.DragEvent, zone: DropZone) {
+    e.preventDefault();
+    setDragOver(null);
+    setDraggingId(null);
+    const playerId =
+      e.dataTransfer.getData(DND_PLAYER_MIME) ||
+      e.dataTransfer.getData("text/plain");
+    if (!playerId) return;
+    await movePlayer(playerId, zone);
+  }
+
+  const teamPlayers = (t: 1 | 2) =>
+    players.filter((p) => p.team === t && !p.is_spectator);
+  const unassignedPlayers = players.filter(
+    (p) => p.team == null && !p.is_spectator,
+  );
+  const spectatorPlayers = players.filter((p) => p.is_spectator);
 
   return (
     <main className="game-canvas min-h-screen flex flex-col items-center gap-8 px-6 py-12">
@@ -526,16 +654,31 @@ function LobbyClientInner({
       )}
 
       {teamsOn ? (
-        <section className="w-full max-w-3xl space-y-4">
+        <section className="w-full max-w-4xl space-y-4">
           <h2 className="text-lg font-heading font-black text-[var(--game-ink)]/80 text-center">
             Teams ({players.length})
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {([1, 2] as const).map((t) => (
+          {isHost && (
+            <p className="text-center text-xs text-[var(--game-ink)]/60">
+              Drag players between columns — or tap the{" "}
+              <span className="font-bold">⇄</span> button.
+            </p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {([1, 2] as const).map((t) => {
+              const zone: DropZone = t === 1 ? "team-1" : "team-2";
+              const isOver = dragOver === zone;
+              return (
               <div
                 key={t}
                 data-team={t}
-                className="game-card p-4 space-y-2"
+                data-drop-zone={zone}
+                onDragOver={(e) => onZoneDragOver(e, zone)}
+                onDragLeave={() => onZoneDragLeave(zone)}
+                onDrop={(e) => onZoneDrop(e, zone)}
+                className={`game-card p-4 space-y-2 transition ${
+                  isOver ? "ring-4 ring-primary ring-offset-2" : ""
+                }`}
                 style={{
                   background: TEAM_META[t].bg,
                 }}
@@ -548,7 +691,7 @@ function LobbyClientInner({
                 </p>
                 {teamPlayers(t).length === 0 && (
                   <p className="text-xs text-[var(--game-ink)]/60 italic">
-                    No players yet.
+                    {isHost ? "Drop a player here." : "No players yet."}
                   </p>
                 )}
                 <ul className="space-y-3">
@@ -559,14 +702,21 @@ function LobbyClientInner({
                       : p.is_host
                       ? "var(--game-canvas-yellow)"
                       : null;
+                    const isDragging = draggingId === p.player_id;
                     return (
                     <li
                       key={p.player_id}
+                      data-player-chip={p.player_id}
+                      draggable={isHost}
+                      onDragStart={(e) => onChipDragStart(e, p.player_id)}
+                      onDragEnd={onChipDragEnd}
                       className="game-card flex items-center gap-3 px-3 py-2 bg-[var(--game-paper)]"
                       style={{
                         transform: `rotate(${i % 2 === 0 ? -0.8 : 0.8}deg)`,
                         outline: highlight ? `4px solid ${highlight}` : undefined,
                         outlineOffset: highlight ? "2px" : undefined,
+                        opacity: isDragging ? 0.5 : undefined,
+                        cursor: isHost ? "grab" : undefined,
                       }}
                     >
                       <span
@@ -626,44 +776,141 @@ function LobbyClientInner({
                   })}
                 </ul>
               </div>
-            ))}
+              );
+            })}
+
+            {/* Spectators column — always visible when teams are on. */}
+            <div
+              data-drop-zone="spectators"
+              onDragOver={(e) => onZoneDragOver(e, "spectators")}
+              onDragLeave={() => onZoneDragLeave("spectators")}
+              onDrop={(e) => onZoneDrop(e, "spectators")}
+              className={`game-card p-4 space-y-2 bg-muted/50 transition ${
+                dragOver === "spectators" ? "ring-4 ring-primary ring-offset-2" : ""
+              }`}
+            >
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--game-ink)]/70">
+                Spectators · {spectatorPlayers.length}
+              </p>
+              {spectatorPlayers.length === 0 && (
+                <p className="text-xs text-[var(--game-ink)]/60 italic">
+                  {isHost ? "Drop here to sit someone out." : "No spectators."}
+                </p>
+              )}
+              <ul className="space-y-3">
+                {spectatorPlayers.map((p, i) => {
+                  const isMe = p.player_id === currentPlayerId;
+                  const isDragging = draggingId === p.player_id;
+                  return (
+                    <li
+                      key={p.player_id}
+                      data-player-chip={p.player_id}
+                      draggable={isHost && p.player_id !== hostId}
+                      onDragStart={(e) => onChipDragStart(e, p.player_id)}
+                      onDragEnd={onChipDragEnd}
+                      className="game-card flex items-center gap-3 px-3 py-2 bg-[var(--game-paper)]"
+                      style={{
+                        transform: `rotate(${i % 2 === 0 ? -0.8 : 0.8}deg)`,
+                        outline: isMe
+                          ? "4px solid var(--game-pink)"
+                          : undefined,
+                        outlineOffset: isMe ? "2px" : undefined,
+                        opacity: isDragging ? 0.5 : undefined,
+                        cursor:
+                          isHost && p.player_id !== hostId
+                            ? "grab"
+                            : undefined,
+                      }}
+                    >
+                      <span
+                        className="player-chip w-8 h-8 text-xs"
+                        style={
+                          {
+                            ["--chip-color" as string]: colorForPlayer(
+                              p.player_id,
+                            ),
+                          } as React.CSSProperties
+                        }
+                      >
+                        {p.display_name.slice(0, 2).toUpperCase()}
+                      </span>
+                      <span
+                        className="font-heading font-bold flex-1 truncate min-w-0"
+                        title={p.display_name}
+                      >
+                        {p.display_name}
+                      </span>
+                      <span className="text-[11px] uppercase tracking-wider opacity-60">
+                        watching
+                      </span>
+                      {isHost && p.player_id !== currentPlayerId && (
+                        <HostControls
+                          roomId={room.id}
+                          victimId={p.player_id}
+                          victimName={p.display_name}
+                          phase={phase}
+                        />
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           </div>
-          {unassignedPlayers.length > 0 && (
-            <div className="game-card p-4 space-y-2 bg-[var(--game-paper)]">
+
+          {(unassignedPlayers.length > 0 || (isHost && dragOver === "unassigned")) && (
+            <div
+              data-drop-zone="unassigned"
+              onDragOver={(e) => onZoneDragOver(e, "unassigned")}
+              onDragLeave={() => onZoneDragLeave("unassigned")}
+              onDrop={(e) => onZoneDrop(e, "unassigned")}
+              className={`game-card p-4 space-y-2 bg-[var(--game-paper)] transition ${
+                dragOver === "unassigned" ? "ring-4 ring-primary ring-offset-2" : ""
+              }`}
+            >
               <p className="text-xs font-black uppercase tracking-widest text-[var(--game-ink)]/70">
                 Unassigned · {unassignedPlayers.length}
               </p>
               <ul className="flex flex-wrap gap-2">
-                {unassignedPlayers.map((p, i) => (
-                  <li
-                    key={p.player_id}
-                    className="sticker flex items-center gap-2"
-                    style={
-                      {
-                        ["--sticker-tilt" as string]: `${
-                          i % 2 === 0 ? -2 : 2
-                        }deg`,
-                      } as React.CSSProperties
-                    }
-                  >
-                    <span className="font-semibold">{p.display_name}</span>
-                    {isHost && (
-                      <button
-                        type="button"
-                        onClick={() => handleSwapTeam(p.player_id, null)}
-                        className="sticker text-[10px]"
-                        style={
-                          {
-                            ["--sticker-tilt" as string]: "0deg",
-                            background: "var(--game-canvas-yellow)",
-                          } as React.CSSProperties
-                        }
-                      >
-                        Assign
-                      </button>
-                    )}
-                  </li>
-                ))}
+                {unassignedPlayers.map((p, i) => {
+                  const isDragging = draggingId === p.player_id;
+                  return (
+                    <li
+                      key={p.player_id}
+                      data-player-chip={p.player_id}
+                      draggable={isHost}
+                      onDragStart={(e) => onChipDragStart(e, p.player_id)}
+                      onDragEnd={onChipDragEnd}
+                      className="sticker flex items-center gap-2"
+                      style={
+                        {
+                          ["--sticker-tilt" as string]: `${
+                            i % 2 === 0 ? -2 : 2
+                          }deg`,
+                          opacity: isDragging ? 0.5 : undefined,
+                          cursor: isHost ? "grab" : undefined,
+                        } as React.CSSProperties
+                      }
+                    >
+                      <span className="font-semibold">{p.display_name}</span>
+                      {isHost && (
+                        <button
+                          type="button"
+                          onClick={() => handleSwapTeam(p.player_id, null)}
+                          className="sticker text-[10px]"
+                          style={
+                            {
+                              ["--sticker-tilt" as string]: "0deg",
+                              background: "var(--game-canvas-yellow)",
+                            } as React.CSSProperties
+                          }
+                        >
+                          Assign
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -738,17 +985,19 @@ function LobbyClientInner({
       {phase === "lobby" && (
         <div className="flex gap-3 flex-wrap justify-center w-full max-w-md">
           {isHost && (() => {
+            const activePlayers = players.filter((p) => !p.is_spectator);
             const teamsIncomplete =
               teamsOn &&
               (teamPlayers(1).length === 0 ||
                 teamPlayers(2).length === 0 ||
                 unassignedPlayers.length > 0);
-            const disabled = players.length < 2 || starting || teamsIncomplete;
+            const disabled =
+              activePlayers.length < 2 || starting || teamsIncomplete;
             const ariaLabel = starting
               ? "Starting"
               : teamsIncomplete
                 ? "Assign every player to a team"
-                : `Start game (${players.length}/2+)`;
+                : `Start game (${activePlayers.length}/2+)`;
             const visibleLabel = starting
               ? "Starting…"
               : teamsIncomplete

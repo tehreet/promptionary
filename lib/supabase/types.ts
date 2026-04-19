@@ -647,6 +647,14 @@ export type Database = {
         Returns: undefined
       }
       realtime_topic_room: { Args: { topic: string }; Returns: string }
+      set_player_spectator: {
+        Args: {
+          p_is_spectator: boolean
+          p_player_id: string
+          p_room_id: string
+        }
+        Returns: undefined
+      }
       set_player_team: {
         Args: { p_player_id: string; p_room_id: string; p_team: number }
         Returns: undefined
@@ -664,6 +672,7 @@ export type Database = {
         Args: { p_guess: string; p_round_id: string }
         Returns: string
       }
+      tick_phase_transitions: { Args: never; Returns: undefined }
       transfer_host: {
         Args: { p_new_host_id: string; p_room_id: string }
         Returns: undefined
@@ -681,7 +690,7 @@ export type Database = {
       }
     }
     Enums: {
-      room_mode: "party" | "teams" | "headsup" | "artist"
+      room_mode: "party" | "artist"
       room_pack: "mixed" | "food" | "wildlife" | "history" | "absurd"
       room_phase:
         | "lobby"
@@ -819,7 +828,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      room_mode: ["party", "teams", "headsup", "artist"],
+      room_mode: ["party", "artist"],
       room_pack: ["mixed", "food", "wildlife", "history", "absurd"],
       room_phase: [
         "lobby",
