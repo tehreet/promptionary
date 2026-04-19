@@ -166,12 +166,21 @@ export async function POST(req: Request) {
 
   const isGameOver = room.round_num >= room.max_rounds;
 
-  if (isGameOver) {
-    await svc
-      .from("rooms")
-      .update({ phase: "game_over", phase_ends_at: null })
-      .eq("id", room.id);
+  // Always advance to reveal (even on the final round). This lets the last
+  // round pace the same as the middle ones — confetti, recap flipboard, top
+  // guesses — before the reveal-advance effect in game-client.tsx flips the
+  // room to game_over. Stats bumps still fire here so the logic stays
+  // colocated; they land a reveal_seconds before the UI shows game_over,
+  // which is fine.
+  const revealEndsAt = new Date(
+    Date.now() + room.reveal_seconds * 1000,
+  ).toISOString();
+  await svc
+    .from("rooms")
+    .update({ phase: "reveal", phase_ends_at: revealEndsAt })
+    .eq("id", room.id);
 
+  if (isGameOver) {
     // Lifetime games/wins bump. Compute winners from the final scoreboard:
     //   - Teams mode: every member of the team with the highest average wins.
     //   - Non-teams:  every player tied for the top score wins (usually one).
@@ -222,14 +231,6 @@ export async function POST(req: Request) {
         p_did_win: winners.has(p.player_id),
       });
     }
-  } else {
-    const revealEndsAt = new Date(
-      Date.now() + room.reveal_seconds * 1000,
-    ).toISOString();
-    await svc
-      .from("rooms")
-      .update({ phase: "reveal", phase_ends_at: revealEndsAt })
-      .eq("id", room.id);
   }
 
   return NextResponse.json({ ok: true });

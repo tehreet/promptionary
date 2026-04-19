@@ -64,8 +64,8 @@ test("sfx: toggle mutes, submit/imageLand/reveal fire during a round", async ({
     });
   }
 
-  // Last round of a 1-round game ends in game_over (reveal phase is skipped),
-  // so the winner cheer is the sfx that fires.
+  // Even a 1-round game paces through reveal (5s here) before flipping to
+  // game_over — winner cheer fires on the game_over transition.
   await host.waitForFunction(
     () =>
       ((window as unknown as { __sfx?: Array<{ name: string }> }).__sfx || [])

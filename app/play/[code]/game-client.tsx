@@ -399,12 +399,15 @@ function GameClientInner({
     currentRound?.id,
   ]);
 
-  // Host advances to next round when the reveal timer genuinely expires.
-  // Reading phase_ends_at directly avoids a render race: when phase flips
-  // from scoring → reveal, useCountdown's `remaining` stays at 0 for one
-  // render before catching up to the new phase_ends_at. If we keyed off
-  // `remaining`, we'd fire start_round instantly and the reveal phase
-  // would last ~1 second instead of reveal_seconds.
+  // Host advances when the reveal timer genuinely expires. Reading
+  // phase_ends_at directly avoids a render race: when phase flips from
+  // scoring → reveal, useCountdown's `remaining` stays at 0 for one render
+  // before catching up to the new phase_ends_at. If we keyed off
+  // `remaining`, we'd fire instantly and reveal would last ~1 second.
+  //
+  // On the final round, the room has already accrued all its scores; we
+  // just flip phase to game_over (the finalize-round route already did the
+  // lifetime stats bump). Otherwise we start the next round.
   useEffect(() => {
     if (!isHost) return;
     if (room.phase !== "reveal") return;
@@ -413,15 +416,31 @@ function GameClientInner({
     const key = `${room.id}-${room.round_num}`;
     if (revealAdvanceRef.current === key) return;
     revealAdvanceRef.current = key;
+    const isFinalRound = room.round_num >= room.max_rounds;
     (async () => {
       try {
         const supabase = supabaseRef.current;
-        await supabase.rpc("start_round", { p_room_id: room.id });
+        if (isFinalRound) {
+          await supabase
+            .from("rooms")
+            .update({ phase: "game_over", phase_ends_at: null })
+            .eq("id", room.id);
+        } else {
+          await supabase.rpc("start_round", { p_room_id: room.id });
+        }
       } catch (e) {
         console.error(e);
       }
     })();
-  }, [isHost, room.phase, room.phase_ends_at, remaining, room.id, room.round_num]);
+  }, [
+    isHost,
+    room.phase,
+    room.phase_ends_at,
+    remaining,
+    room.id,
+    room.round_num,
+    room.max_rounds,
+  ]);
 
   // When entering reveal phase, fetch all scored guesses + role tokens so
   // everyone sees the recap.
