@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Unbounded } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -40,6 +40,15 @@ export const metadata: Metadata = {
     description:
       "Pictionary, in reverse. Guess the prompt behind the AI's painting.",
   },
+};
+
+// Discord uses the first `theme-color` meta for the embed's left bar;
+// Safari/iOS uses it for the address bar tint.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f43f5e" },
+    { media: "(prefers-color-scheme: dark)", color: "#6366f1" },
+  ],
 };
 
 export default function RootLayout({
