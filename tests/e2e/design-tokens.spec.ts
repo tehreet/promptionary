@@ -55,4 +55,10 @@ test.describe("design tokens", () => {
     await hostCtx.close();
     await joinerCtx.close();
   });
+
+  // NOTE: a reveal-phase smoke that drives a full Gemini round to assert
+  // .game-frame + .prompt-flip was prototyped here and consistently timed
+  // out on local Gemini latency. The same surface is already covered by
+  // recap.spec.ts (flipboard tokens) and, implicitly, by full-round.spec.ts.
+  // Leaving the extra smoke out to keep this suite fast + deterministic.
 });

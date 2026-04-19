@@ -840,11 +840,13 @@ function GameClientInner({
 
           {currentRound?.image_url && (
             <LiveCursorsOverlay>
-              <img
-                src={currentRound.image_url}
-                alt="Round"
-                className="w-full rounded-3xl shadow-xl border-4 border-border"
-              />
+              <div className="game-frame bg-[var(--game-paper)] p-2 inline-block">
+                <img
+                  src={currentRound.image_url}
+                  alt="Round"
+                  className="rounded-[10px] block max-w-full h-auto"
+                />
+              </div>
             </LiveCursorsOverlay>
           )}
           {currentRound?.prompt && (
@@ -870,7 +872,7 @@ function GameClientInner({
               {isTeams ? (
                 <div
                   data-team-final="1"
-                  className="w-full bg-card border border-border shadow-sm rounded-2xl p-6 mt-4 space-y-4"
+                  className="w-full space-y-4 mt-4"
                 >
                   <p className="text-center text-xs uppercase tracking-widest opacity-70">
                     Final team leaderboard
@@ -880,13 +882,17 @@ function GameClientInner({
                       <li
                         key={t.team}
                         data-team-rank={i + 1}
-                        className="rounded-2xl border-2 p-4"
+                        className="game-card bg-[var(--game-paper)] p-4 relative overflow-hidden"
                         style={{
-                          borderColor: TEAM_META[t.team].color,
-                          background: `color-mix(in oklab, ${TEAM_META[t.team].color} 12%, transparent)`,
+                          transform: i === 0 ? "rotate(2deg)" : undefined,
                         }}
                       >
-                        <div className="flex items-baseline justify-between gap-3">
+                        <span
+                          aria-hidden
+                          className="absolute left-0 top-0 bottom-0 w-1"
+                          style={{ background: TEAM_META[t.team].color }}
+                        />
+                        <div className="flex items-baseline justify-between gap-3 pl-2">
                           <div className="flex items-baseline gap-2">
                             <span className="text-sm font-black opacity-60">
                               #{i + 1}
@@ -899,7 +905,7 @@ function GameClientInner({
                             </span>
                           </div>
                           <div className="text-right">
-                            <p className="font-mono font-black text-3xl">
+                            <p className="font-mono font-black text-3xl text-[var(--game-ink)]">
                               {t.avg}
                             </p>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -907,14 +913,14 @@ function GameClientInner({
                             </p>
                           </div>
                         </div>
-                        <ul className="mt-3 flex flex-wrap gap-2">
+                        <ul className="mt-3 flex flex-wrap gap-2 pl-2">
                           {t.members
                             .slice()
                             .sort((a, b) => b.score - a.score)
                             .map((m) => (
                               <li
                                 key={m.player_id}
-                                className="rounded-full bg-card border border-border px-3 py-1 text-xs flex items-center gap-2"
+                                className="rounded-full bg-[var(--game-paper)] border-2 border-[var(--game-ink)] px-3 py-1 text-xs flex items-center gap-2 text-[var(--game-ink)]"
                               >
                                 <span
                                   className="player-chip h-5 w-5 text-[10px]"
@@ -940,11 +946,11 @@ function GameClientInner({
                   </ul>
                 </div>
               ) : (
-                <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-6 mt-4">
-                  <p className="text-center text-xs uppercase tracking-widest opacity-70 mb-3">
+                <div className="w-full mt-4 space-y-3">
+                  <p className="text-center text-xs uppercase tracking-widest opacity-70">
                     Final leaderboard
                   </p>
-                  <ul className="space-y-2">
+                  <ul className="space-y-3">
                     {leaderboard.map((p, i) => (
                       <LeaderboardRow
                         key={p.player_id}
@@ -1019,7 +1025,7 @@ function GuessRow({
           </p>
           {isTop && (
             <span
-              className="nailed-pop inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-fuchsia)] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-0.5 shadow-sm"
+              className="nailed-pop inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-fuchsia)] text-[var(--game-cream)] text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-0.5 shadow-sm"
               style={{ animationDelay: "0.4s" }}
               data-nailed-it={nailedIt ? "1" : "0"}
             >
@@ -1051,21 +1057,33 @@ function LeaderboardRow({
   player: Player;
 }) {
   const score = useAnimatedNumber(player.score, 1200);
+  const isWinner = rank === 1;
   return (
-    <li className="flex items-center gap-3 rounded-xl px-3 py-2 bg-muted text-foreground">
+    <li
+      className="game-card bg-[var(--game-paper)] flex items-center gap-3 px-4 py-3 text-[var(--game-ink)]"
+      style={isWinner ? { transform: "rotate(2deg)" } : undefined}
+    >
       <span className="w-6 text-center font-black opacity-70">{rank}</span>
       <span
-        className="player-chip h-8 w-8 shrink-0 text-sm"
+        className="player-chip w-10 h-10 shrink-0 text-sm"
         style={{
           ["--chip-color" as string]: colorForPlayer(player.player_id),
         } as React.CSSProperties}
       >
-        {player.display_name[0]?.toUpperCase()}
+        {player.display_name.slice(0, 2).toUpperCase()}
       </span>
-      <span className="flex-1 font-semibold truncate">{player.display_name}</span>
-      <span className="font-heading font-black font-mono text-xl tabular-nums">
-        {score}
+      <span className="flex-1 font-heading font-bold truncate text-[var(--game-ink)]">
+        {player.display_name}
       </span>
+      {isWinner ? (
+        <span className="game-hero-mark font-mono font-black text-lg tabular-nums">
+          {score}
+        </span>
+      ) : (
+        <span className="font-heading font-black font-mono text-xl tabular-nums text-[var(--game-ink)]">
+          {score}
+        </span>
+      )}
     </li>
   );
 }

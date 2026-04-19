@@ -418,6 +418,14 @@
     .live-dot { animation: none; }
   }
 
+  /* Role underlines — inset highlight behind ink-colored prompt tokens.
+     Used by .prompt-flip tiles in <PromptFlipboard> to color-code
+     subject / style / modifier / filler without tinting the text. */
+  .role-subject-underline { box-shadow: inset 0 -6px 0 var(--game-pink); }
+  .role-style-underline { box-shadow: inset 0 -6px 0 var(--game-cyan); }
+  .role-modifier-underline { box-shadow: inset 0 -6px 0 var(--game-orange); }
+  .role-filler-underline { box-shadow: inset 0 -6px 0 color-mix(in oklch, var(--game-ink) 20%, transparent); }
+
   /* Avatar chip — replaces hardcoded text-white/text-black spots across
      the codebase. Override fill via style={{ "--chip-color": "#ff5eb4" }}. */
   .player-chip {
