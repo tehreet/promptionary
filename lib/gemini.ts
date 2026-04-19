@@ -24,7 +24,7 @@ Fixed ingredients for this round — every one must appear in the final prompt:
 - Time/weather: ${time}
 - Style/medium: ${style}
 
-Rewrite these five ingredients into ONE coherent, paintable image prompt, 14-22 words. Stay concrete and sensory. Keep it PG and don't reference real living people by name.${avoid}
+Rewrite these five ingredients into ONE coherent, paintable image prompt, 14-22 words. Stay concrete and sensory. Keep it PG and don't reference real living people by name. Do not render any text, letters, words, captions, labels, watermarks, or signs within the image. Pure imagery only.${avoid}
 
 After writing the prompt, tag every word with its role:
 - subject: the noun(s) a player needs to guess (the main thing in the scene)

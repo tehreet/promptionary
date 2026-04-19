@@ -7,18 +7,26 @@ export function HostControls({
   roomId,
   victimId,
   victimName,
+  phase,
   canMakeHost = true,
   canKick = true,
 }: {
   roomId: string;
   victimId: string;
   victimName: string;
+  phase?: string;
   canMakeHost?: boolean;
   canKick?: boolean;
 }) {
   const supabaseRef = useRef(createSupabaseBrowserClient());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Host transfer is DB-guarded to lobby / game_over. Hide the button in any
+  // other phase so hosts don't see a control that will throw.
+  const transferAllowed =
+    phase === undefined || phase === "lobby" || phase === "game_over";
+  const showMakeHost = canMakeHost && transferAllowed;
 
   async function makeHost() {
     setBusy(true);
@@ -44,7 +52,7 @@ export function HostControls({
 
   return (
     <div className="flex items-center gap-1.5 ml-auto shrink-0">
-      {canMakeHost && (
+      {showMakeHost && (
         <button
           type="button"
           onClick={makeHost}
