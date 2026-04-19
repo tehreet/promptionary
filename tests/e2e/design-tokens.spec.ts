@@ -12,10 +12,10 @@ test.describe("design tokens", () => {
     expect(fg).not.toBe("");
   });
 
-  test("landing uses game-canvas-page (yellow, light-locked)", async ({ page }) => {
+  test("landing uses the shared game-canvas", async ({ page }) => {
     await page.goto("/");
     const main = page.locator("main").first();
-    await expect(main).toHaveClass(/game-canvas-page/);
+    await expect(main).toHaveClass(/game-canvas/);
     const hero = page.locator(".game-hero").first();
     await expect(hero).toBeVisible();
     const mark = page.locator(".game-hero-mark").first();

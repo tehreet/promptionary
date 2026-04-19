@@ -34,7 +34,7 @@ export default async function Home() {
   const defaultName = profile?.display_name ?? null;
 
   return (
-    <main className="min-h-screen game-canvas-page flex flex-col items-center gap-14 px-5 py-12 sm:py-16">
+    <main className="min-h-screen game-canvas flex flex-col items-center gap-14 px-5 py-12 sm:py-16">
       {/* Hero */}
       <section className="text-center max-w-3xl pt-2">
         <span
@@ -68,7 +68,7 @@ export default async function Home() {
           data-daily-cta="1"
           className="game-card group flex items-center justify-between gap-4 px-6 py-5"
           style={{
-            background: "var(--game-ink)",
+            background: "var(--game-canvas-dark)",
             color: "var(--game-cream)",
           }}
         >
@@ -110,7 +110,7 @@ export default async function Home() {
                 className="mx-auto w-12 h-12 rounded-full flex items-center justify-center font-heading font-black italic text-xl"
                 style={{
                   background: s.dotColor,
-                  color: "var(--game-ink)",
+                  color: "var(--game-canvas-dark)",
                   border: "3px solid var(--game-cream)",
                   transform: `rotate(${s.tilt}deg)`,
                 }}
