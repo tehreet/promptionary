@@ -360,6 +360,47 @@ export type Database = {
           },
         ]
       }
+      room_reactions: {
+        Row: {
+          color: string
+          created_at: string
+          emoji: string
+          id: string
+          player_id: string
+          room_id: string
+          x: number
+          y: number
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          emoji: string
+          id?: string
+          player_id: string
+          room_id: string
+          x: number
+          y: number
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          emoji?: string
+          id?: string
+          player_id?: string
+          room_id?: string
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_reactions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms: {
         Row: {
           code: string
@@ -591,11 +632,29 @@ export type Database = {
         Args: { p_content: string; p_room_id: string; p_team?: number }
         Returns: string
       }
+      post_reaction: {
+        Args: {
+          p_color: string
+          p_emoji: string
+          p_room_id: string
+          p_x: number
+          p_y: number
+        }
+        Returns: string
+      }
       promote_anon_for_passkey: {
         Args: { p_display_name: string; p_email: string; p_user_id: string }
         Returns: undefined
       }
       realtime_topic_room: { Args: { topic: string }; Returns: string }
+      set_player_spectator: {
+        Args: {
+          p_is_spectator: boolean
+          p_player_id: string
+          p_room_id: string
+        }
+        Returns: undefined
+      }
       set_player_team: {
         Args: { p_player_id: string; p_room_id: string; p_team: number }
         Returns: undefined
@@ -613,6 +672,7 @@ export type Database = {
         Args: { p_guess: string; p_round_id: string }
         Returns: string
       }
+      tick_phase_transitions: { Args: never; Returns: undefined }
       transfer_host: {
         Args: { p_new_host_id: string; p_room_id: string }
         Returns: undefined
@@ -630,7 +690,7 @@ export type Database = {
       }
     }
     Enums: {
-      room_mode: "party" | "teams" | "headsup" | "artist"
+      room_mode: "party" | "artist"
       room_pack: "mixed" | "food" | "wildlife" | "history" | "absurd"
       room_phase:
         | "lobby"
@@ -768,7 +828,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      room_mode: ["party", "teams", "headsup", "artist"],
+      room_mode: ["party", "artist"],
       room_pack: ["mixed", "food", "wildlife", "history", "absurd"],
       room_phase: [
         "lobby",

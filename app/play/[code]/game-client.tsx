@@ -699,6 +699,18 @@ function GameClientInner({
     [competitors],
   );
   const isTeams = !!room.teams_enabled;
+  const myTeam = useMemo(() => {
+    const me = players.find((p) => p.player_id === currentPlayerId);
+    return me?.team ?? null;
+  }, [players, currentPlayerId]);
+  // Team chat is the right default during active rounds — teammates need a
+  // private channel to coordinate while the round is live. On reveal /
+  // game_over we fall back to room-wide so everyone can debrief together.
+  const teamChatActive =
+    isTeams &&
+    !isSpectator &&
+    typeof myTeam === "number" &&
+    ["generating", "guessing", "prompting", "scoring"].includes(room.phase);
   const teamLeaderboard = useMemo(() => {
     if (!isTeams) return [] as Array<{
       team: 1 | 2;
@@ -1115,6 +1127,8 @@ function GameClientInner({
         roomPhase={room.phase}
         isSpectator={isSpectator}
         variant="floating"
+        teamOnly={teamChatActive}
+        team={teamChatActive ? myTeam : null}
       />
       </main>
     </LiveCursorsOverlay>
