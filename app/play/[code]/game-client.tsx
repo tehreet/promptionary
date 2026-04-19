@@ -104,6 +104,7 @@ export function GameClient({
   const generatingCalledRef = useRef<string | null>(null);
   const finalizeCalledRef = useRef<string | null>(null);
   const revealAdvanceRef = useRef<string | null>(null);
+  const autoSubmittedRef = useRef<string | null>(null);
   const roundNumRef = useRef<number>(room.round_num);
   roundNumRef.current = room.round_num;
 
@@ -387,10 +388,40 @@ export function GameClient({
       p_guess: text,
     });
     if (error) {
-      alert(error.message);
+      // Don't alert on auto-submit failures (phase already ended, etc.) — the
+      // user didn't ask us to do this, just shelve silently.
+      if (!autoSubmittedRef.current) {
+        alert(error.message);
+      }
       setGuessSubmitted(false);
     }
   }, [currentRound?.id, myGuess]);
+
+  // Auto-submit whatever's in the textarea when the guess timer is almost out.
+  // Fires at ~2s left so we beat the server's "phase_ends_at > now()" check
+  // with comfortable headroom.
+  useEffect(() => {
+    if (room.phase !== "guessing") return;
+    if (guessSubmitted) return;
+    if (isSpectator) return;
+    if (!currentRound?.id) return;
+    if (autoSubmittedRef.current === currentRound.id) return;
+    if (!myGuess.trim()) return;
+    if (!room.phase_ends_at) return;
+    const msLeft = new Date(room.phase_ends_at).getTime() - Date.now();
+    if (msLeft > 2000) return;
+    autoSubmittedRef.current = currentRound.id;
+    submitGuess();
+  }, [
+    room.phase,
+    room.phase_ends_at,
+    remaining,
+    guessSubmitted,
+    isSpectator,
+    myGuess,
+    currentRound?.id,
+    submitGuess,
+  ]);
 
   const playerById = useMemo(
     () => new Map(players.map((p) => [p.player_id, p])),
