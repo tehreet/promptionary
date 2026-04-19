@@ -357,6 +357,27 @@
     .live-dot { animation: none; }
   }
 
+  /* Urgent variant of the marquee pill — tints pink/destructive and pulses
+     once per second during the final-5 countdown. Motion is suppressed
+     under prefers-reduced-motion; tint + border color remain so the urgency
+     still reads. */
+  .marquee-pill--urgent {
+    background: var(--game-pink);
+    color: var(--game-cream);
+    border-color: var(--game-pink);
+    animation: pill-urgent-pulse 1s ease-in-out infinite;
+  }
+  .marquee-pill--urgent .live-dot {
+    background: var(--game-cream);
+  }
+  @keyframes pill-urgent-pulse {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50%      { transform: scale(1.08); filter: brightness(1.12); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-pill--urgent { animation: none; }
+  }
+
   /* Role underlines — inset highlight behind ink-colored prompt tokens.
      Used by .prompt-flip tiles in <PromptFlipboard> to color-code
      subject / style / modifier / filler without tinting the text. */

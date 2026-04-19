@@ -5,7 +5,8 @@ type SfxName =
   | "imageLand"
   | "winnerCheer"
   | "roundStart"
-  | "reveal";
+  | "reveal"
+  | "tick";
 
 const STORAGE_KEY = "promptionary.sfx-muted";
 
@@ -159,4 +160,21 @@ export function playReveal(): void {
   const now = c.currentTime;
   tone(c, 392, now, 0.12, { type: "triangle", gain: 0.14 });
   tone(c, 523.25, now + 0.09, 0.16, { type: "triangle", gain: 0.14 });
+}
+
+// Short woodblock-y tick for the final-5-seconds countdown. Log first so
+// tests can assert even when audio is muted. Tiny, sharp, ~60ms.
+export function playTick(): void {
+  logCall("tick");
+  if (muted) return;
+  const c = getCtx();
+  if (!c) return;
+  const now = c.currentTime;
+  tone(c, 820, now, 0.06, {
+    type: "square",
+    gain: 0.09,
+    attack: 0.002,
+    release: 0.04,
+    freqTo: 640,
+  });
 }

@@ -76,3 +76,50 @@ test("sfx: toggle mutes, submit/imageLand/reveal fire during a round", async ({
   await hostCtx.close();
   await joinerCtx.close();
 });
+
+test("sfx: clock-tick fires and countdown chip goes urgent in final 5s", async ({
+  browser,
+}) => {
+  test.setTimeout(180_000);
+
+  // Short guess window so the host crosses under 5s without us having to
+  // burn the full default 45s. `createRoomAs` honors guessSeconds.
+  const hostCtx = await browser.newContext();
+  const host = await hostCtx.newPage();
+  const code = await createRoomAs(host, `TickHost${Date.now()}`, {
+    maxRounds: 1,
+    guessSeconds: 20,
+    revealSeconds: 5,
+  });
+
+  const joinerCtx = await browser.newContext();
+  const joiner = await joinerCtx.newPage();
+  await joinRoomAs(joiner, code, `TickJoiner${Date.now()}`);
+
+  await host.getByRole("button", { name: /Start game/ }).click();
+
+  // Wait for guessing phase to land on the host. The guessing image uses
+  // alt="Round painting"; the reveal-phase image uses alt="Round".
+  await expect(
+    host.getByRole("textbox", { name: /What's the prompt/ }),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(host.locator('img[alt="Round painting"]')).toBeVisible();
+
+  // The countdown chip should eventually enter its urgent state when
+  // remaining <= 5. Wait for the data-urgent flag rather than sleeping.
+  await expect(host.locator('[data-urgent="1"]').first()).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // By now at least one tick sfx call should be logged. Typing nothing
+  // avoids the auto-submit path from swallowing the final seconds.
+  await host.waitForFunction(
+    () =>
+      ((window as unknown as { __sfx?: Array<{ name: string }> }).__sfx || [])
+        .some((e) => e.name === "tick"),
+    { timeout: 15_000 },
+  );
+
+  await hostCtx.close();
+  await joinerCtx.close();
+});
