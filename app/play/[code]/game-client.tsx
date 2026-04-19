@@ -22,6 +22,7 @@ type Player = {
   player_id: string;
   display_name: string;
   is_host: boolean;
+  is_spectator?: boolean;
   score: number;
 };
 
@@ -70,10 +71,12 @@ export function GameClient({
   room: initialRoom,
   players: initialPlayers,
   currentPlayerId,
+  isSpectator = false,
 }: {
   room: Room;
   players: Player[];
   currentPlayerId: string;
+  isSpectator?: boolean;
 }) {
   const [room, setRoom] = useState<Room>(initialRoom);
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
@@ -160,7 +163,7 @@ export function GameClient({
 
       const { data: ps } = await supabase
         .from("room_players")
-        .select("player_id, display_name, is_host, score")
+        .select("player_id, display_name, is_host, is_spectator, score")
         .eq("room_id", room.id);
       if (ps) setPlayers(ps as Player[]);
 
@@ -283,11 +286,17 @@ export function GameClient({
     })();
   }, [room.phase, room.phase_ends_at, remaining, currentRound?.id]);
 
-  // Host advances to next round when reveal timer hits 0
+  // Host advances to next round when the reveal timer genuinely expires.
+  // Reading phase_ends_at directly avoids a render race: when phase flips
+  // from scoring → reveal, useCountdown's `remaining` stays at 0 for one
+  // render before catching up to the new phase_ends_at. If we keyed off
+  // `remaining`, we'd fire start_round instantly and the reveal phase
+  // would last ~1 second instead of reveal_seconds.
   useEffect(() => {
     if (!isHost) return;
     if (room.phase !== "reveal") return;
-    if (remaining > 0) return;
+    if (!room.phase_ends_at) return;
+    if (new Date(room.phase_ends_at).getTime() > Date.now()) return;
     const key = `${room.id}-${room.round_num}`;
     if (revealAdvanceRef.current === key) return;
     revealAdvanceRef.current = key;
@@ -299,7 +308,7 @@ export function GameClient({
         console.error(e);
       }
     })();
-  }, [isHost, room.phase, remaining, room.id, room.round_num]);
+  }, [isHost, room.phase, room.phase_ends_at, remaining, room.id, room.round_num]);
 
   // When entering reveal phase, fetch all scored guesses so everyone sees them
   useEffect(() => {
@@ -333,7 +342,10 @@ export function GameClient({
   }, [currentRound?.id, myGuess]);
 
   const playerById = new Map(players.map((p) => [p.player_id, p]));
-  const leaderboard = [...players].sort((a, b) => b.score - a.score);
+  const competitors = players.filter((p) => !p.is_spectator);
+  const spectators = players.filter((p) => p.is_spectator);
+  const leaderboard = [...competitors].sort((a, b) => b.score - a.score);
+  const submissionTotal = competitors.length || players.length;
 
   return (
     <main className="min-h-screen flex flex-col items-center gap-6 bg-gradient-to-br from-indigo-500 via-fuchsia-500 to-rose-500 text-white px-6 py-10">
@@ -344,11 +356,49 @@ export function GameClient({
             {room.round_num} / {room.max_rounds}
           </p>
         </div>
+        {isSpectator && (
+          <div className="rounded-full bg-white/20 border border-white/30 px-3 py-1 text-xs font-bold uppercase tracking-wider">
+            Spectating
+          </div>
+        )}
         <div className="text-right">
           <p className="text-xs uppercase tracking-widest opacity-70">Code</p>
           <p className="text-2xl font-black font-mono tracking-[0.3em]">{room.code}</p>
         </div>
       </header>
+
+      {/* Running scoreboard — visible every phase except game_over (which has its own) */}
+      {room.phase !== "game_over" && leaderboard.length > 0 && (
+        <section className="w-full max-w-4xl rounded-2xl bg-white/10 backdrop-blur border border-white/20 px-4 py-3">
+          <ul className="flex flex-wrap items-center gap-3 justify-center">
+            {leaderboard.map((p, i) => (
+              <li
+                key={p.player_id}
+                className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1"
+              >
+                <span className="text-xs opacity-60 font-black w-4 text-right">
+                  {i + 1}
+                </span>
+                <span
+                  className="h-6 w-6 rounded-full flex items-center justify-center text-black text-xs font-black"
+                  style={{ background: colorForPlayer(p.player_id) }}
+                >
+                  {p.display_name[0]?.toUpperCase()}
+                </span>
+                <span className="text-sm font-semibold truncate max-w-[8rem]">
+                  {p.display_name}
+                </span>
+                <span className="font-black font-mono">{p.score}</span>
+              </li>
+            ))}
+          </ul>
+          {spectators.length > 0 && (
+            <p className="text-xs opacity-70 text-center mt-2">
+              {spectators.length} watching
+            </p>
+          )}
+        </section>
+      )}
 
       {room.phase === "generating" && (
         <div className="flex flex-col items-center gap-4 py-20 max-w-xl text-center">
@@ -380,7 +430,7 @@ export function GameClient({
         <section className="w-full max-w-2xl flex flex-col items-center gap-5">
           <div className="w-full flex items-center justify-between">
             <p className="text-lg font-semibold opacity-90">
-              Submissions: {submissionCount}/{players.length}
+              Submissions: {submissionCount}/{submissionTotal}
             </p>
             <p className="text-3xl font-black font-mono">{remaining}s</p>
           </div>
@@ -391,7 +441,11 @@ export function GameClient({
               className="w-full rounded-3xl shadow-2xl border-4 border-white/30"
             />
           )}
-          {guessSubmitted ? (
+          {isSpectator ? (
+            <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-4 text-center">
+              <p className="font-bold">Spectating — guesses are hidden until reveal.</p>
+            </div>
+          ) : guessSubmitted ? (
             <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-4 text-center">
               <p className="font-bold">Guess in! Waiting on the rest…</p>
             </div>

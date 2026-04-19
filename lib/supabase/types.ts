@@ -75,6 +75,7 @@ export type Database = {
         Row: {
           display_name: string
           is_host: boolean
+          is_spectator: boolean
           joined_at: string
           last_seen_at: string
           player_id: string
@@ -84,6 +85,7 @@ export type Database = {
         Insert: {
           display_name: string
           is_host?: boolean
+          is_spectator?: boolean
           joined_at?: string
           last_seen_at?: string
           player_id: string
@@ -93,6 +95,7 @@ export type Database = {
         Update: {
           display_name?: string
           is_host?: boolean
+          is_spectator?: boolean
           joined_at?: string
           last_seen_at?: string
           player_id?: string
@@ -267,7 +270,11 @@ export type Database = {
       generate_room_code: { Args: never; Returns: string }
       is_room_member: { Args: { p_room_id: string }; Returns: boolean }
       join_room_by_code: {
-        Args: { p_code: string; p_display_name: string }
+        Args: {
+          p_as_spectator?: boolean
+          p_code: string
+          p_display_name: string
+        }
         Returns: string
       }
       leave_room: { Args: { p_room_id: string }; Returns: undefined }

@@ -1,8 +1,9 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureAnonSession } from "@/app/actions/auth";
 import { LobbyClient } from "./lobby-client";
 import { GameClient } from "./game-client";
+import { JoinInline } from "./join-inline";
 
 export default async function LobbyPage({
   params,
@@ -28,12 +29,12 @@ export default async function LobbyPage({
 
   const { data: members } = await supabase
     .from("room_players")
-    .select("player_id, display_name, is_host, score")
+    .select("player_id, display_name, is_host, is_spectator, score")
     .eq("room_id", room.id);
 
-  const isMember = members?.some((m) => m.player_id === user.id);
-  if (!isMember) {
-    redirect(`/?join=${code}`);
+  const me = members?.find((m) => m.player_id === user.id);
+  if (!me) {
+    return <JoinInline code={code} asSpectator={room.phase !== "lobby"} />;
   }
 
   if (room.phase === "lobby") {
@@ -51,6 +52,7 @@ export default async function LobbyPage({
       room={room}
       players={members ?? []}
       currentPlayerId={user.id}
+      isSpectator={me.is_spectator}
     />
   );
 }

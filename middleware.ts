@@ -22,7 +22,13 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+  // First-time visitors (no session cookie) get signed in here. Doing this
+  // in middleware — not a server component — is what lets the cookie
+  // actually make it to the browser. Server components can't set cookies.
+  if (!user) {
+    await supabase.auth.signInAnonymously();
+  }
 
   return response;
 }

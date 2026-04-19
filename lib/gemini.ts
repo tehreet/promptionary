@@ -3,22 +3,89 @@ import { serverEnv } from "@/lib/env";
 
 const ai = new GoogleGenAI({ apiKey: serverEnv!.GOOGLE_GENAI_API_KEY! });
 
-const PROMPT_AUTHOR_INSTRUCTION = `You author secret prompts for an AI-image guessing party game called Promptionary.
+const SUBJECT_SEEDS = [
+  "a raccoon running a bakery",
+  "ballerinas in a library",
+  "a grandmother knitting",
+  "a scuba diver at a coral reef",
+  "a farmer harvesting pumpkins",
+  "a hiker on a snowy ridge",
+  "a group of kids on a playground",
+  "a busy ramen shop",
+  "a lighthouse in a storm",
+  "a cat sleeping on a quilt",
+  "a hot-air balloon festival",
+  "a market with fresh produce",
+  "a dog surfing",
+  "a potter at a wheel",
+  "a postman on a bike",
+  "a hedgehog drinking tea",
+  "an orchard at dawn",
+  "a ballroom dance",
+  "a marching band",
+  "children blowing bubbles",
+  "a bee on a sunflower",
+  "a wedding under fairy lights",
+  "a campfire singalong",
+  "a tea ceremony",
+  "a pair of otters holding hands",
+  "a chef plating sushi",
+  "a blacksmith forging a sword",
+  "two friends playing chess",
+  "a toddler painting with fingers",
+  "a gondola ride in Venice",
+  "a fox in a snowy forest",
+  "a subway platform at rush hour",
+  "a librarian with a stack of books",
+  "a jazz trio in a lounge",
+  "a family picnic in a meadow",
+];
 
-Write a vivid, guessable image prompt between 12 and 20 words. Rules:
-- ONE or TWO clear subjects (nouns a player could guess): "cat", "astronaut", "castle"
-- ONE or TWO distinctive style cues: "watercolor", "cinematic", "8-bit pixel art", "Studio Ghibli"
-- ONE or TWO mood/lighting adjectives: "moody", "neon-drenched", "golden hour"
-- OPTIONAL: one unexpected modifier: "wearing a monocle", "in zero gravity"
-- No real people by name. Keep it PG.
+const STYLE_SEEDS = [
+  "soft watercolor",
+  "oil-on-canvas impressionist",
+  "ink wash",
+  "Studio Ghibli anime",
+  "Wes Anderson film still",
+  "Renaissance fresco",
+  "charcoal sketch",
+  "linocut print",
+  "stained-glass",
+  "tilt-shift miniature photo",
+  "1970s vintage postcard",
+  "claymation still",
+  "pastel crayon",
+  "golden-hour photograph",
+  "mosaic",
+  "children's storybook illustration",
+  "Norman Rockwell painting",
+  "Dutch Golden Age still life",
+  "gouache illustration",
+  "pencil line drawing",
+];
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function buildAuthorInstruction() {
+  const subject = pickRandom(SUBJECT_SEEDS);
+  const style = pickRandom(STYLE_SEEDS);
+  return `You author secret prompts for an AI-image guessing party game called Promptionary.
+
+Use THIS scene seed: "${subject}"
+Use THIS style seed: "${style}"
+
+Rewrite the scene + style into ONE vivid image prompt of 12-20 words. Add 1-2 sensory details or a light mood cue so it's atmospheric, not a generic caption. The prompt must stay PG, never reference real people by name, and NEVER use the words "cyberpunk", "neon", "robot", "futuristic", "sci-fi", or "dystopian" unless the subject seed explicitly is cyberpunk-themed (it isn't here).
 
 After writing, tag every word of your prompt with its role:
-- subject: the main noun(s) a player needs to guess (cat, castle, astronaut)
-- style: explicit style/medium cues (watercolor, cinematic, pixel art)
-- modifier: descriptive adjectives or unusual attributes (moody, monocle)
+- subject: the main noun(s) a player needs to guess (cat, castle, baker)
+- style: explicit style/medium cues (watercolor, cinematic, impressionist)
+- modifier: descriptive adjectives or unusual attributes (moody, wrinkled, glistening)
 - filler: articles, prepositions, connectors (a, the, of, in)
 
-Tokenize word-by-word in order. Do NOT repeat the whole prompt in a single "token". Hyphenated terms stay as one token.`;
+Tokenize the prompt word-by-word in reading order. Do NOT pack the whole prompt into a single "token". Hyphenated terms stay as one token. Every word of the prompt must appear exactly once in tokens.`;
+}
 
 export async function authorPromptWithRoles(): Promise<{
   prompt: string;
@@ -29,8 +96,9 @@ export async function authorPromptWithRoles(): Promise<{
 }> {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: PROMPT_AUTHOR_INSTRUCTION,
+    contents: buildAuthorInstruction(),
     config: {
+      temperature: 1.2,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,

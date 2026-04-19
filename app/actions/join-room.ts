@@ -8,6 +8,7 @@ export async function joinRoomAction(formData: FormData) {
   await ensureAnonSession();
   const displayName = String(formData.get("displayName") ?? "").trim();
   const rawCode = String(formData.get("code") ?? "").trim().toUpperCase();
+  const asSpectator = formData.get("spectator") === "1";
   if (!displayName) throw new Error("display name required");
   if (!/^[A-Z]{4}$/.test(rawCode)) throw new Error("code must be 4 letters");
 
@@ -15,6 +16,7 @@ export async function joinRoomAction(formData: FormData) {
   const { error } = await supabase.rpc("join_room_by_code", {
     p_code: rawCode,
     p_display_name: displayName,
+    p_as_spectator: asSpectator,
   });
   if (error) throw error;
 
