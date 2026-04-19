@@ -12,25 +12,26 @@ export function JoinRoomCard() {
   const initialName = useMemo(() => randomDisplayName(), []);
   const codeRef = useRef<HTMLInputElement>(null);
   return (
-    <Card className="w-full max-w-sm bg-white/10 backdrop-blur border-white/20 text-white shadow-2xl">
+    <Card className="w-full max-w-sm bg-card/90 backdrop-blur border-border shadow-xl rounded-3xl">
       <CardHeader>
-        <CardTitle className="text-2xl font-black">Join a Room</CardTitle>
+        <CardTitle className="text-2xl font-heading font-black">
+          Join a Room
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={joinRoomAction} className="space-y-3">
+        <form action={joinRoomAction} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="join-name" className="text-white/90">Your name</Label>
+            <Label htmlFor="join-name">Your name</Label>
             <Input
               id="join-name"
               name="displayName"
               defaultValue={initialName}
               maxLength={24}
               required
-              className="bg-white/20 border-white/30 placeholder:text-white/50 text-white"
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="join-code" className="text-white/90">Room code</Label>
+            <Label htmlFor="join-code">Room code</Label>
             <Input
               id="join-code"
               name="code"
@@ -41,12 +42,13 @@ export function JoinRoomCard() {
               maxLength={4}
               placeholder="ABCD"
               required
-              className="bg-white/20 border-white/30 placeholder:text-white/40 text-white font-mono text-2xl tracking-[0.4em] uppercase text-center h-14"
+              className="font-mono text-2xl tracking-[0.4em] uppercase text-center h-14"
             />
           </div>
           <Button
             type="submit"
-            className="w-full bg-white text-rose-600 hover:bg-white/90 font-bold text-base h-11 rounded-xl"
+            variant="secondary"
+            className="w-full h-12 rounded-xl font-bold text-base bg-foreground text-background hover:bg-foreground/90"
           >
             Join Room
           </Button>

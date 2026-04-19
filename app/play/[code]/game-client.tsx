@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import confetti from "canvas-confetti";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useAnimatedNumber } from "@/lib/animation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { colorForPlayer } from "@/lib/player";
@@ -385,6 +387,51 @@ export function GameClient({
     })();
   }, [room.phase, currentRound?.id]);
 
+  // Confetti on reveal (modest) + game_over (big winner blast)
+  const revealFiredRef = useRef<string | null>(null);
+  const gameOverFiredRef = useRef(false);
+  useEffect(() => {
+    if (room.phase === "reveal" && currentRound?.id) {
+      if (revealFiredRef.current === currentRound.id) return;
+      revealFiredRef.current = currentRound.id;
+      confetti({
+        particleCount: 80,
+        spread: 55,
+        startVelocity: 35,
+        origin: { y: 0.35 },
+        colors: ["#6366f1", "#d946ef", "#f43f5e", "#fde68a"],
+        disableForReducedMotion: true,
+      });
+    }
+    if (room.phase === "game_over" && !gameOverFiredRef.current) {
+      gameOverFiredRef.current = true;
+      const fire = (delay: number, opts: confetti.Options) =>
+        setTimeout(() => confetti({ disableForReducedMotion: true, ...opts }), delay);
+      fire(0, {
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.4 },
+        colors: ["#6366f1", "#d946ef", "#f43f5e", "#fde68a", "#a78bfa"],
+      });
+      fire(250, {
+        particleCount: 90,
+        spread: 100,
+        angle: 60,
+        origin: { x: 0, y: 0.6 },
+      });
+      fire(500, {
+        particleCount: 90,
+        spread: 100,
+        angle: 120,
+        origin: { x: 1, y: 0.6 },
+      });
+    }
+    if (room.phase === "lobby") {
+      gameOverFiredRef.current = false;
+      revealFiredRef.current = null;
+    }
+  }, [room.phase, currentRound?.id]);
+
   const submitGuess = useCallback(async () => {
     if (!currentRound?.id) return;
     const text = myGuess.trim();
@@ -449,33 +496,39 @@ export function GameClient({
   );
 
   return (
-    <main className="min-h-screen flex flex-col items-center gap-6 bg-gradient-to-br from-indigo-500 via-fuchsia-500 to-rose-500 text-white px-6 py-10">
-      <header className="w-full max-w-4xl flex items-center justify-between">
+    <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-6 px-6 py-10">
+      <header className="w-full max-w-4xl flex items-center justify-between gap-2">
         <div>
-          <p className="text-xs uppercase tracking-widest opacity-70">Round</p>
-          <p className="text-2xl font-black">
+          <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted-foreground">
+            Round
+          </p>
+          <p className="text-xl sm:text-2xl font-heading font-black">
             {room.round_num} / {room.max_rounds}
           </p>
         </div>
         {isSpectator && (
-          <div className="rounded-full bg-white/20 border border-white/30 px-3 py-1 text-xs font-bold uppercase tracking-wider">
+          <div className="rounded-full bg-accent text-accent-foreground border border-border px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-bold uppercase tracking-wider">
             Spectating
           </div>
         )}
         <div className="text-right">
-          <p className="text-xs uppercase tracking-widest opacity-70">Code</p>
-          <p className="text-2xl font-black font-mono tracking-[0.3em]">{room.code}</p>
+          <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted-foreground">
+            Code
+          </p>
+          <p className="text-xl sm:text-2xl font-heading font-black font-mono tracking-[0.2em] sm:tracking-[0.3em]">
+            {room.code}
+          </p>
         </div>
       </header>
 
       {/* Running scoreboard — visible every phase except game_over (which has its own) */}
       {room.phase !== "game_over" && leaderboard.length > 0 && (
-        <section className="w-full max-w-4xl rounded-2xl bg-white/10 backdrop-blur border border-white/20 px-4 py-3">
+        <section className="w-full max-w-4xl rounded-2xl bg-card border border-border shadow-sm px-4 py-3 text-foreground">
           <ul className="flex flex-wrap items-center gap-3 justify-center">
             {leaderboard.map((p, i) => (
               <li
                 key={p.player_id}
-                className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1"
+                className="flex items-center gap-2 rounded-full bg-muted text-foreground px-3 py-1"
               >
                 <span className="text-xs opacity-60 font-black w-4 text-right">
                   {i + 1}
@@ -531,7 +584,7 @@ export function GameClient({
             </>
           ) : (
             <>
-              <div className="h-20 w-20 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+              <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
               <p className="text-xl font-bold">The AI is painting…</p>
               <p className="opacity-70 text-sm">
                 {isHost ? "Thanks for hosting — this takes ~10 seconds" : "Hold tight"}
@@ -572,19 +625,19 @@ export function GameClient({
             <img
               src={currentRound.image_url}
               alt="Round"
-              className="w-full rounded-3xl shadow-2xl border-4 border-white/30"
+              className="w-full rounded-3xl shadow-xl border-4 border-border"
             />
           )}
           {isSpectator ? (
-            <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-4 text-center">
+            <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-4 text-center">
               <p className="font-bold">Spectating — guesses are hidden until reveal.</p>
             </div>
           ) : iAmArtist ? (
-            <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-4 text-center">
+            <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-4 text-center">
               <p className="font-bold">You wrote this one — watch the guesses come in ✨</p>
             </div>
           ) : guessSubmitted ? (
-            <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-4 text-center">
+            <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-4 text-center">
               <p className="font-bold">Guess in! Waiting on the rest…</p>
             </div>
           ) : (
@@ -608,7 +661,7 @@ export function GameClient({
                 maxLength={200}
                 autoFocus
                 rows={3}
-                className="bg-white/20 border-white/30 placeholder:text-white/50 text-white text-lg rounded-xl min-h-[96px] resize-y leading-relaxed p-4"
+                className="text-lg rounded-xl min-h-[96px] resize-y leading-relaxed p-4"
               />
               <div className="flex items-center justify-between text-xs opacity-70">
                 <span>{myGuess.length}/200</span>
@@ -617,7 +670,7 @@ export function GameClient({
               <Button
                 type="submit"
                 disabled={!myGuess.trim()}
-                className="bg-white text-indigo-700 hover:bg-white/90 font-bold h-14 px-8 rounded-xl text-lg"
+                className="font-bold h-14 px-8 rounded-xl text-lg"
               >
                 Guess
               </Button>
@@ -628,7 +681,7 @@ export function GameClient({
 
       {room.phase === "scoring" && (
         <div className="flex flex-col items-center gap-4 py-20">
-          <div className="h-20 w-20 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+          <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
           <p className="text-xl font-bold">Scoring guesses…</p>
         </div>
       )}
@@ -644,11 +697,11 @@ export function GameClient({
             <img
               src={currentRound.image_url}
               alt="Round"
-              className="w-full rounded-3xl shadow-2xl border-4 border-white/30"
+              className="w-full rounded-3xl shadow-xl border-4 border-border"
             />
           )}
           {currentRound?.prompt && (
-            <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-5 text-center">
+            <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-5 text-center">
               <p className="text-xs uppercase tracking-widest opacity-70 mb-1">
                 The prompt was
               </p>
@@ -656,63 +709,25 @@ export function GameClient({
             </div>
           )}
           <ul className="w-full space-y-2">
-            {guessesFromReveal.map((g, i) => {
-              const p = playerById.get(g.player_id);
-              return (
-                <li
-                  key={g.id}
-                  className="rounded-2xl px-4 py-3 backdrop-blur bg-white/10 border border-white/20 flex items-center gap-4"
-                >
-                  <span className="w-6 text-center font-black opacity-70">{i + 1}</span>
-                  <span
-                    className="h-8 w-8 rounded-full flex items-center justify-center text-black font-black"
-                    style={{ background: colorForPlayer(g.player_id) }}
-                  >
-                    {p?.display_name[0]?.toUpperCase()}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{p?.display_name ?? "—"}</p>
-                    <p className="text-sm opacity-80 truncate italic">
-                      &ldquo;{g.guess}&rdquo;
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-black font-mono">+{g.total_score}</p>
-                    <p className="text-xs opacity-70">
-                      {g.subject_score}s · {g.style_score}y · {g.semantic_score}m · {g.speed_bonus}b
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
+            {guessesFromReveal.map((g, i) => (
+              <GuessRow
+                key={g.id}
+                rank={i + 1}
+                guess={g}
+                player={playerById.get(g.player_id)}
+              />
+            ))}
           </ul>
 
           {room.phase === "game_over" && (
             <>
-              <div className="w-full bg-white/15 backdrop-blur border border-white/20 rounded-2xl p-6 mt-4">
+              <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-6 mt-4">
                 <p className="text-center text-xs uppercase tracking-widest opacity-70 mb-3">
                   Final leaderboard
                 </p>
                 <ul className="space-y-2">
                   {leaderboard.map((p, i) => (
-                    <li
-                      key={p.player_id}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2 bg-white/10"
-                    >
-                      <span className="w-6 text-center font-black opacity-70">
-                        {i + 1}
-                      </span>
-                      <span
-                        className="h-8 w-8 rounded-full flex items-center justify-center text-black font-black"
-                        style={{ background: colorForPlayer(p.player_id) }}
-                      >
-                        {p.display_name[0]?.toUpperCase()}
-                      </span>
-                      <span className="flex-1 font-semibold truncate">
-                        {p.display_name}
-                      </span>
-                      <span className="font-black font-mono text-xl">{p.score}</span>
-                    </li>
+                    <LeaderboardRow key={p.player_id} rank={i + 1} player={p} />
                   ))}
                 </ul>
               </div>
@@ -722,6 +737,72 @@ export function GameClient({
         </section>
       )}
     </main>
+  );
+}
+
+function GuessRow({
+  rank,
+  guess,
+  player,
+}: {
+  rank: number;
+  guess: Guess;
+  player: Player | undefined;
+}) {
+  const score = useAnimatedNumber(guess.total_score, 900);
+  return (
+    <li className="rounded-2xl px-3 sm:px-4 py-3 bg-card border border-border flex items-start gap-3 sm:gap-4 shadow-sm">
+      <span className="w-5 sm:w-6 text-center font-black text-muted-foreground pt-0.5 text-sm sm:text-base">
+        {rank}
+      </span>
+      <span
+        className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-black font-black"
+        style={{ background: colorForPlayer(guess.player_id) }}
+      >
+        {player?.display_name[0]?.toUpperCase()}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold truncate text-sm sm:text-base">
+          {player?.display_name ?? "—"}
+        </p>
+        <p className="text-sm text-foreground/80 italic whitespace-pre-wrap break-words leading-relaxed">
+          &ldquo;{guess.guess}&rdquo;
+        </p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-xl sm:text-2xl font-heading font-black font-mono tabular-nums">
+          +{score}
+        </p>
+        <p className="text-[10px] sm:text-xs text-muted-foreground">
+          {guess.subject_score}s · {guess.style_score}y · {guess.semantic_score}m · {guess.speed_bonus}b
+        </p>
+      </div>
+    </li>
+  );
+}
+
+function LeaderboardRow({
+  rank,
+  player,
+}: {
+  rank: number;
+  player: Player;
+}) {
+  const score = useAnimatedNumber(player.score, 1200);
+  return (
+    <li className="flex items-center gap-3 rounded-xl px-3 py-2 bg-muted text-foreground">
+      <span className="w-6 text-center font-black opacity-70">{rank}</span>
+      <span
+        className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-black font-black"
+        style={{ background: colorForPlayer(player.player_id) }}
+      >
+        {player.display_name[0]?.toUpperCase()}
+      </span>
+      <span className="flex-1 font-semibold truncate">{player.display_name}</span>
+      <span className="font-heading font-black font-mono text-xl tabular-nums">
+        {score}
+      </span>
+    </li>
   );
 }
 
@@ -761,7 +842,7 @@ function PlayAgainControls({ room, isHost }: { room: Room; isHost: boolean }) {
   return (
     <div className="w-full flex flex-col gap-3 mt-4">
       {advanced && (
-        <div className="grid grid-cols-3 gap-2 rounded-xl bg-white/10 p-3">
+        <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted p-3">
           <NumField
             label="Rounds"
             value={maxRounds}
@@ -789,7 +870,7 @@ function PlayAgainControls({ room, isHost }: { room: Room; isHost: boolean }) {
         <Button
           onClick={playAgain}
           disabled={loading}
-          className="bg-white text-indigo-700 hover:bg-white/90 font-bold text-lg px-8 py-6 rounded-2xl"
+          className="font-bold text-lg px-8 py-6 rounded-2xl"
         >
           {loading ? "Resetting…" : "Play Again"}
         </Button>
@@ -825,7 +906,7 @@ function NumField({
 }) {
   return (
     <label className="space-y-1 block">
-      <span className="text-[10px] uppercase tracking-wider text-white/70">
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
       <input
@@ -837,7 +918,7 @@ function NumField({
           const n = Number(e.target.value);
           if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, Math.trunc(n))));
         }}
-        className="w-full bg-white/20 border border-white/30 rounded-lg text-white text-center font-mono h-9 px-2"
+        className="w-full bg-background border border-input rounded-lg text-foreground text-center font-mono h-9 px-2"
       />
     </label>
   );
@@ -901,7 +982,7 @@ function ArtistPromptingView({
         </p>
         {submitting ? (
           <div className="flex flex-col items-center gap-3 py-8">
-            <div className="h-14 w-14 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+            <div className="h-14 w-14 rounded-full border-4 border-muted border-t-foreground animate-spin" />
             <p className="font-bold">Sending to the AI…</p>
           </div>
         ) : (
@@ -925,7 +1006,7 @@ function ArtistPromptingView({
               maxLength={240}
               rows={4}
               autoFocus
-              className="bg-white/20 border-white/30 placeholder:text-white/50 text-white text-lg rounded-xl min-h-[120px] resize-y leading-relaxed p-4"
+              className="text-lg rounded-xl min-h-[120px] resize-y leading-relaxed p-4"
             />
             <div className="flex items-center justify-between text-xs opacity-70">
               <span>{prompt.length}/240</span>
@@ -937,7 +1018,7 @@ function ArtistPromptingView({
             <Button
               type="submit"
               disabled={prompt.trim().length < 4}
-              className="bg-white text-indigo-700 hover:bg-white/90 font-bold h-14 px-8 rounded-xl text-lg"
+              className="font-bold h-14 px-8 rounded-xl text-lg"
             >
               Send to the AI
             </Button>
@@ -949,7 +1030,7 @@ function ArtistPromptingView({
 
   return (
     <div className="flex flex-col items-center gap-4 py-16 max-w-md text-center">
-      <div className="h-20 w-20 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+      <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
       <p className="text-xl font-bold">
         {artist?.display_name ?? "The artist"} is cooking something up…
       </p>

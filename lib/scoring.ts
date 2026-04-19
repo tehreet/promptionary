@@ -70,12 +70,18 @@ export function scoreGuess({
     Math.max(0, cosine(guessEmbedding, promptEmbedding)) * 20,
   );
 
+  // Speed bonus scales with both the quality of the guess and how early it
+  // was submitted. No threshold — even small guesses get a tiny nudge for
+  // moving fast, but the multiplier caps the reward for a blank-ish guess.
   const preBonus = subject_score + style_score + semantic_score;
   let speed_bonus = 0;
-  if (preBonus > 40) {
+  if (preBonus > 0) {
     const elapsedMs = submittedAt.getTime() - phaseStartedAt.getTime();
-    const fraction = Math.max(0, 1 - elapsedMs / (guessSeconds * 1000));
-    speed_bonus = Math.round(fraction * 10);
+    const timeFrac = Math.max(0, 1 - elapsedMs / (guessSeconds * 1000));
+    // Scale peaks at 10 when preBonus >= 60 (a great guess), down to 2
+    // when preBonus is marginal. Keeps early-submit always worth a bit.
+    const qualityFrac = Math.min(1, preBonus / 60);
+    speed_bonus = Math.round(timeFrac * (2 + qualityFrac * 8));
   }
 
   return { subject_score, style_score, semantic_score, speed_bonus };

@@ -13,67 +13,54 @@ export function CreateRoomCard() {
   const [advanced, setAdvanced] = useState(false);
   const [mode, setMode] = useState<"party" | "artist">("party");
   return (
-    <Card className="w-full max-w-sm bg-white/10 backdrop-blur border-white/20 text-white shadow-2xl">
+    <Card className="w-full max-w-sm bg-card/90 backdrop-blur border-border shadow-xl rounded-3xl">
       <CardHeader>
-        <CardTitle className="text-2xl font-black">Create a Room</CardTitle>
+        <CardTitle className="text-2xl font-heading font-black">
+          Create a Room
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={createRoomAction} className="space-y-3">
+        <form action={createRoomAction} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="create-name" className="text-white/90">
-              Your name
-            </Label>
+            <Label htmlFor="create-name">Your name</Label>
             <Input
               id="create-name"
               name="displayName"
               defaultValue={initialName}
               maxLength={24}
               required
-              className="bg-white/20 border-white/30 placeholder:text-white/50 text-white"
             />
           </div>
 
           <input type="hidden" name="mode" value={mode} />
           <div className="space-y-1.5">
-            <Label className="text-white/90">Mode</Label>
+            <Label>Mode</Label>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
+              <ModeButton
+                active={mode === "party"}
                 onClick={() => setMode("party")}
-                className={`rounded-xl px-3 py-2 border text-left transition ${
-                  mode === "party"
-                    ? "bg-white text-indigo-700 border-white font-bold"
-                    : "bg-white/10 border-white/30 hover:bg-white/20"
-                }`}
-              >
-                <p className="text-sm font-semibold">Party</p>
-                <p className="text-[11px] opacity-80">AI picks the prompt</p>
-              </button>
-              <button
-                type="button"
+                title="Party"
+                subtitle="AI picks the prompt"
+              />
+              <ModeButton
+                active={mode === "artist"}
                 onClick={() => setMode("artist")}
-                className={`rounded-xl px-3 py-2 border text-left transition ${
-                  mode === "artist"
-                    ? "bg-white text-rose-600 border-white font-bold"
-                    : "bg-white/10 border-white/30 hover:bg-white/20"
-                }`}
-              >
-                <p className="text-sm font-semibold">Artist</p>
-                <p className="text-[11px] opacity-80">You write the prompts</p>
-              </button>
+                title="Artist"
+                subtitle="You write the prompts"
+              />
             </div>
           </div>
 
           <button
             type="button"
             onClick={() => setAdvanced((v) => !v)}
-            className="text-xs opacity-80 hover:opacity-100 underline-offset-4 hover:underline"
+            className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
           >
             {advanced ? "Hide settings" : "Customize rounds & timing"}
           </button>
 
           {advanced && (
-            <div className="grid grid-cols-3 gap-2 rounded-xl bg-white/10 p-3">
+            <div className="grid grid-cols-3 gap-2 rounded-2xl bg-muted/60 p-3">
               <ConfigField name="maxRounds" label="Rounds" def={5} min={1} max={20} />
               <ConfigField
                 name="guessSeconds"
@@ -94,13 +81,40 @@ export function CreateRoomCard() {
 
           <Button
             type="submit"
-            className="w-full bg-white text-indigo-700 hover:bg-white/90 font-bold text-base h-11 rounded-xl"
+            className="w-full h-12 rounded-xl font-bold text-base"
           >
             Create Room
           </Button>
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  title,
+  subtitle,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl px-3 py-2 border text-left transition ${
+        active
+          ? "bg-primary text-primary-foreground border-primary font-bold shadow-sm"
+          : "bg-card border-border hover:bg-muted"
+      }`}
+    >
+      <p className="text-sm font-semibold">{title}</p>
+      <p className="text-[11px] opacity-80">{subtitle}</p>
+    </button>
   );
 }
 
@@ -119,7 +133,10 @@ function ConfigField({
 }) {
   return (
     <div className="space-y-1">
-      <Label htmlFor={`cfg-${name}`} className="text-[10px] uppercase tracking-wider text-white/70">
+      <Label
+        htmlFor={`cfg-${name}`}
+        className="text-[10px] uppercase tracking-wider text-muted-foreground"
+      >
         {label}
       </Label>
       <Input
@@ -129,7 +146,7 @@ function ConfigField({
         defaultValue={def}
         min={min}
         max={max}
-        className="bg-white/20 border-white/30 text-white text-center font-mono h-9"
+        className="text-center font-mono h-9"
       />
     </div>
   );

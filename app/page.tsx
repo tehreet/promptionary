@@ -21,35 +21,37 @@ const steps = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center gap-16 bg-gradient-to-br from-indigo-500 via-fuchsia-500 to-rose-500 text-white px-6 py-16">
-      <section className="text-center space-y-4 pt-8">
-        <h1 className="text-7xl md:text-8xl font-black tracking-tight drop-shadow-lg">
-          Promptionary
-        </h1>
-        <p className="text-xl md:text-2xl opacity-95 font-medium max-w-xl mx-auto">
+    <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-16 px-6 py-20">
+      <section className="text-center space-y-5 pt-6 max-w-3xl">
+        <h1 className="text-hero text-6xl md:text-8xl">Promptionary</h1>
+        <p className="text-xl md:text-2xl text-foreground/80 font-medium max-w-xl mx-auto">
           Pictionary, in reverse. Guess the prompt behind the AI&rsquo;s painting.
         </p>
       </section>
 
-      <section className="flex flex-col md:flex-row gap-6 w-full max-w-3xl items-stretch justify-center">
+      <section className="flex flex-col md:flex-row gap-5 w-full max-w-3xl items-stretch justify-center">
         <CreateRoomCard />
         <JoinRoomCard />
       </section>
 
-      <section className="w-full max-w-4xl grid gap-6 md:grid-cols-3">
+      <section className="w-full max-w-4xl grid gap-5 md:grid-cols-3">
         {steps.map((s) => (
           <div
             key={s.n}
-            className="rounded-3xl bg-white/10 backdrop-blur border border-white/20 p-6 space-y-2"
+            className="rounded-3xl bg-card/80 backdrop-blur border border-border p-6 space-y-2 shadow-sm"
           >
-            <p className="text-4xl font-black font-mono opacity-80">{s.n}</p>
-            <h3 className="text-lg font-black">{s.title}</h3>
-            <p className="text-sm opacity-90 leading-relaxed">{s.body}</p>
+            <p className="text-4xl font-heading font-black text-primary opacity-80">
+              {s.n}
+            </p>
+            <h3 className="text-lg font-heading font-black">{s.title}</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {s.body}
+            </p>
           </div>
         ))}
       </section>
 
-      <footer className="text-xs opacity-70 pt-4">
+      <footer className="text-xs text-muted-foreground pt-4">
         Made for friends. Powered by Gemini.
       </footer>
     </main>

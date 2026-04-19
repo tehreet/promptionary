@@ -6,6 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { colorForPlayer } from "@/lib/player";
 import { leaveRoomAction } from "@/app/actions/leave-room";
+import { InviteCard } from "./invite-card";
 
 type Room = {
   id: string;
@@ -133,34 +134,40 @@ export function LobbyClient({
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center gap-8 bg-gradient-to-br from-indigo-500 via-fuchsia-500 to-rose-500 text-white px-6 py-12">
+    <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-8 px-6 py-12">
       <header className="text-center space-y-2">
-        <p className="text-sm uppercase tracking-widest opacity-80">Room code</p>
-        <h1 className="text-7xl font-black font-mono tracking-[0.3em] drop-shadow-lg">
+        <p className="text-sm uppercase tracking-widest text-muted-foreground">
+          Room code
+        </p>
+        <h1 className="text-hero text-5xl sm:text-7xl font-mono tracking-[0.25em] sm:tracking-[0.3em]">
           {room.code}
         </h1>
-        <p className="opacity-80 text-sm">Share this code with friends to join.</p>
+        <p className="text-muted-foreground text-sm">
+          Share this code or the link below to let friends in.
+        </p>
       </header>
 
+      <InviteCard code={room.code} />
+
       <section className="w-full max-w-2xl space-y-3">
-        <h2 className="text-lg font-semibold opacity-80">
+        <h2 className="text-lg font-heading font-black text-foreground/80">
           Players ({players.length})
         </h2>
         <ul className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {players.map((p) => (
             <li
               key={p.player_id}
-              className="rounded-2xl px-4 py-3 backdrop-blur bg-white/15 border border-white/20 flex items-center gap-3"
+              className="rounded-2xl px-4 py-3 bg-card border border-border flex items-center gap-3 shadow-sm"
             >
               <span
-                className="h-8 w-8 rounded-full flex items-center justify-center text-black font-black"
+                className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-black font-black"
                 style={{ background: colorForPlayer(p.player_id) }}
               >
                 {p.display_name[0]?.toUpperCase()}
               </span>
               <span className="font-semibold truncate">{p.display_name}</span>
               {p.is_host && (
-                <span className="ml-auto text-xs bg-white/20 rounded-full px-2 py-0.5">
+                <span className="ml-auto text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5">
                   host
                 </span>
               )}
@@ -170,12 +177,12 @@ export function LobbyClient({
       </section>
 
       {phase === "lobby" && (
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap justify-center">
           {isHost && (
             <Button
               onClick={handleStart}
               disabled={players.length < 2 || starting}
-              className="bg-white text-indigo-700 hover:bg-white/90 font-bold text-lg px-8 py-6 rounded-2xl disabled:opacity-50"
+              className="font-bold text-lg px-8 py-6 rounded-2xl"
             >
               {starting ? "Starting…" : `Start game (${players.length}/2+)`}
             </Button>
@@ -188,7 +195,7 @@ export function LobbyClient({
             }
             disabled={isPending}
             variant="outline"
-            className="bg-white/10 border-white/30 hover:bg-white/20 text-white rounded-2xl px-6"
+            className="rounded-2xl px-6"
           >
             Leave
           </Button>
@@ -196,7 +203,7 @@ export function LobbyClient({
       )}
 
       {phase !== "lobby" && (
-        <div className="text-center text-2xl font-bold opacity-90">
+        <div className="text-center text-2xl font-heading font-black opacity-90">
           Game in progress — phase: {phase}
         </div>
       )}
