@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const size = { width: 48, height: 48 };
+export const size = { width: 192, height: 192 };
 export const contentType = "image/png";
 
 export default function Icon() {
@@ -16,7 +16,7 @@ export default function Icon() {
           // Hex mirrors the game-canvas yellow + pink sticker palette;
           // ImageResponse can't read CSS vars.
           color: "#1e1b4d",
-          fontSize: 34,
+          fontSize: 136,
           fontWeight: 900,
           letterSpacing: "-0.05em",
           fontFamily: "sans-serif",
