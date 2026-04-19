@@ -40,7 +40,7 @@ export default async function Home() {
         <JoinRoomCard defaultName={defaultName} />
       </section>
 
-      <section className="w-full max-w-3xl">
+      <section className="w-full max-w-3xl grid gap-3 sm:grid-cols-[1fr_auto]">
         <Link
           href="/daily"
           data-daily-cta="1"
@@ -59,6 +59,21 @@ export default async function Home() {
           </div>
           <span className="text-3xl shrink-0 group-hover:translate-x-1 transition-transform">
             →
+          </span>
+        </Link>
+        <Link
+          href="/leaders"
+          data-leaders-cta="1"
+          className="group flex sm:flex-col items-center sm:items-start justify-between gap-3 sm:gap-1 rounded-3xl bg-card/90 backdrop-blur border border-border px-5 py-4 sm:py-5 shadow-sm hover:shadow-md transition sm:w-44"
+        >
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              All-time
+            </p>
+            <p className="text-lg font-heading font-black">Leaders</p>
+          </div>
+          <span className="text-2xl group-hover:translate-x-1 transition-transform">
+            🏆
           </span>
         </Link>
       </section>
