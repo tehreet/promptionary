@@ -208,6 +208,8 @@ export function GameClient({
     };
   }, [room.id, room.round_num]);
 
+  const [startError, setStartError] = useState<string | null>(null);
+
   // Host triggers /api/start-round when phase=generating (and we have a round id)
   useEffect(() => {
     if (!isHost) return;
@@ -215,6 +217,7 @@ export function GameClient({
     if (!currentRound?.id) return;
     if (generatingCalledRef.current === currentRound.id) return;
     generatingCalledRef.current = currentRound.id;
+    setStartError(null);
     (async () => {
       try {
         const res = await fetch("/api/start-round", {
@@ -223,11 +226,11 @@ export function GameClient({
           body: JSON.stringify({ round_id: currentRound.id }),
         });
         if (!res.ok) {
-          const body = await res.text();
-          console.error("start-round failed", body);
+          const body = await res.json().catch(() => ({}));
+          setStartError(body.detail || body.error || `status ${res.status}`);
         }
       } catch (e) {
-        console.error(e);
+        setStartError(e instanceof Error ? e.message : String(e));
       }
     })();
   }, [isHost, room.phase, currentRound?.id]);
@@ -321,12 +324,28 @@ export function GameClient({
       </header>
 
       {room.phase === "generating" && (
-        <div className="flex flex-col items-center gap-4 py-20">
-          <div className="h-20 w-20 rounded-full border-4 border-white/30 border-t-white animate-spin" />
-          <p className="text-xl font-bold">The AI is painting…</p>
-          <p className="opacity-70 text-sm">
-            {isHost ? "Thanks for hosting — this takes ~10 seconds" : "Hold tight"}
-          </p>
+        <div className="flex flex-col items-center gap-4 py-20 max-w-xl text-center">
+          {startError ? (
+            <>
+              <p className="text-2xl font-black">Image generation failed</p>
+              <pre className="text-xs bg-black/30 rounded-xl p-3 whitespace-pre-wrap break-all max-w-full">
+                {startError}
+              </pre>
+              <p className="opacity-80 text-sm">
+                {isHost
+                  ? "You'll be dropped back to the lobby shortly."
+                  : "The host is trying again."}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="h-20 w-20 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+              <p className="text-xl font-bold">The AI is painting…</p>
+              <p className="opacity-70 text-sm">
+                {isHost ? "Thanks for hosting — this takes ~10 seconds" : "Hold tight"}
+              </p>
+            </>
+          )}
         </div>
       )}
 

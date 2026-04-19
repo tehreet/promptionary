@@ -61,24 +61,35 @@ export async function authorPromptWithRoles(): Promise<{
   return parsed;
 }
 
+// NanoBanana 2 (`gemini-3.1-flash-image-preview`) is preferred but requires a
+// paid Gemini tier. Fall back to NanoBanana 1 (`gemini-2.5-flash-image`) so
+// dev keys on the free plan can still exercise the full flow.
+const IMAGE_MODELS = [
+  "gemini-3.1-flash-image-preview",
+  "gemini-2.5-flash-image",
+];
+
 export async function generateImagePng(prompt: string): Promise<Buffer> {
-  const response = await ai.models.generateContent({
-    model: "gemini-3.1-flash-image-preview",
-    contents: prompt,
-  });
-  for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-    if (part.inlineData?.data) {
-      return Buffer.from(part.inlineData.data, "base64");
+  let lastErr: unknown;
+  for (const model of IMAGE_MODELS) {
+    try {
+      const response = await ai.models.generateContent({ model, contents: prompt });
+      for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+        if (part.inlineData?.data) return Buffer.from(part.inlineData.data, "base64");
+      }
+      throw new Error(`gemini ${model} returned no inlineData`);
+    } catch (e) {
+      lastErr = e;
     }
   }
-  throw new Error("gemini image response had no inlineData");
+  throw lastErr ?? new Error("no image model available");
 }
 
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   const out: number[][] = [];
   for (const text of texts) {
     const res = await ai.models.embedContent({
-      model: "text-embedding-004",
+      model: "gemini-embedding-001",
       contents: text,
     });
     out.push(res.embeddings?.[0]?.values ?? []);

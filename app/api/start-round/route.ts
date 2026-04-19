@@ -48,9 +48,26 @@ export async function POST(req: Request) {
     );
   }
 
-  const { prompt, tokens } = await authorPromptWithRoles();
-
-  const pngBuffer = await generateImagePng(prompt);
+  let prompt: string;
+  let tokens: Awaited<ReturnType<typeof authorPromptWithRoles>>["tokens"];
+  let pngBuffer: Buffer;
+  try {
+    ({ prompt, tokens } = await authorPromptWithRoles());
+    pngBuffer = await generateImagePng(prompt);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("[start-round] gemini failed", message);
+    // Kick the room back to lobby so players aren't stuck staring at a spinner.
+    await svc
+      .from("rooms")
+      .update({ phase: "lobby", round_num: round.round_num > 0 ? round.round_num - 1 : 0 })
+      .eq("id", round.room_id);
+    await svc.from("rounds").delete().eq("id", round.id);
+    return NextResponse.json(
+      { error: "gemini request failed", detail: message },
+      { status: 502 },
+    );
+  }
 
   const storagePath = `${round.room_id}/${round.id}.png`;
   const upload = await svc.storage
