@@ -8,6 +8,7 @@ import {
 } from "@/lib/supabase/server";
 import {
   SIGNIN_CHALLENGE_COOKIE,
+  base64urlToBytes,
   getExpectedOrigins,
   getRpIdFromRequest,
 } from "@/lib/passkey";
@@ -29,13 +30,12 @@ export async function POST(req: Request) {
   }
 
   const credentialIdRaw = body.response.id;
-  const credentialIdBytes = Buffer.from(credentialIdRaw, "base64url");
 
   const svc = createSupabaseServiceClient();
   const { data: cred } = await svc
     .from("passkeys")
     .select("id, user_id, credential_id, public_key, counter, transports")
-    .eq("credential_id", credentialIdBytes)
+    .eq("credential_id", credentialIdRaw)
     .maybeSingle();
   if (!cred) {
     return NextResponse.json(
@@ -53,10 +53,8 @@ export async function POST(req: Request) {
       expectedRPID: getRpIdFromRequest(req),
       requireUserVerification: false,
       credential: {
-        id: Buffer.from(cred.credential_id as unknown as Buffer).toString(
-          "base64url",
-        ),
-        publicKey: new Uint8Array(cred.public_key as unknown as Buffer),
+        id: cred.credential_id,
+        publicKey: new Uint8Array(base64urlToBytes(cred.public_key)),
         counter: Number(cred.counter),
         transports: (cred.transports ?? []) as AuthenticatorTransport[],
       },
