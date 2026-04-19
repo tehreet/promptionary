@@ -859,12 +859,17 @@ function GameClientInner({
           <ReactionsBarWrapper />
 
           {currentRound?.image_url && (
-            <div className="game-frame bg-[var(--game-paper)] p-2 inline-block">
+            <div className="game-frame bg-[var(--game-paper)] p-2 inline-block relative">
               <img
                 src={currentRound.image_url}
                 alt="Round"
                 className="rounded-[10px] block max-w-full h-auto"
               />
+              {currentRound.id && (
+                <div className="absolute top-3 right-3">
+                  <ShareRoundButton roundId={currentRound.id} />
+                </div>
+              )}
             </div>
           )}
           {currentRound?.prompt && (
@@ -1384,5 +1389,34 @@ function ArtistPromptingView({
         <p className="text-2xl font-black font-mono opacity-90">{remaining}s</p>
       )}
     </div>
+  );
+}
+
+// Tiny overlay badge pinned to the round image during reveal/game_over that
+// copies a link to /r/<round_id>. Kept non-invasive on purpose — the share
+// page itself is where viewers land.
+function ShareRoundButton({ roundId }: { roundId: string }) {
+  const [copied, setCopied] = useState(false);
+  const onClick = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    const url = `${window.location.origin}/r/${roundId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard API may be blocked — silently noop.
+    }
+  }, [roundId]);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Copy shareable link to this round"
+      data-share-round="1"
+      className="inline-flex items-center gap-1 rounded-full bg-[var(--game-paper)]/90 border-2 border-[var(--game-ink)] text-[var(--game-ink)] text-[11px] font-black uppercase tracking-wider px-3 py-1 shadow-md hover:-translate-y-0.5 transition-transform"
+    >
+      {copied ? "Copied" : "Share"}
+    </button>
   );
 }
