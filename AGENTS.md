@@ -8,14 +8,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## What it is
 
-Multiplayer AI party game — Pictionary in reverse. Gemini paints from a secret prompt, players guess. Live at https://promptionary-three.vercel.app (promptionary.io DNS is pending at Namecheap).
+Multiplayer AI party game — Pictionary in reverse. Gemini paints from a secret prompt, players guess. Live at https://promptionary.io (apex) and https://promptionary-three.vercel.app (Vercel alias).
 
 Two modes:
 
-- **Party** — Gemini 2.5 Flash authors the secret prompt (5-dimension random seeding + avoid-recent context). Gemini 3.1 Flash Image Preview renders it. Players guess; scored by role-weighted token match (subject / style) + semantic similarity + speed bonus.
+- **Party** — Gemini 2.5 Flash authors the secret prompt (5-dimension random seeding + avoid-recent context). Gemini 3.1 Flash Image Preview renders it. Players guess; scored by role-weighted token match (subject / style) + semantic similarity + speed bonus. Optional theme packs (food / wildlife / history / absurd / mixed) filter the subject/setting pools.
 - **Artist** — one player per round writes the prompt; everyone else guesses. Artist's score = average of the guessers' totals. Rotation by join order.
 
-Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, running scoreboard, inter-round chat (DB-level phase blackout), live cursors, emoji reactions all shipped.
+Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, running scoreboard, inter-round chat (DB-level phase blackout), live cursors, emoji reactions, sound effects (submit / image-land / winner cheer), flipboard prompt recap with role-colored tokens + top-guess callout, host-only kick / transfer-host controls, solo Daily puzzle at `/daily` with global leaderboard and share card — all shipped.
 
 ## Tech stack
 
@@ -79,25 +79,31 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 
 - **Every user-visible feature gets an e2e test.** Don't claim "it works" on a UI change without running Playwright.
 - Tests live in `tests/e2e/`. Helpers in `tests/e2e/helpers.ts` (`createRoomAs`, `joinRoomAs`, `submitGuess`).
-- Current coverage (all green, 10 tests, ~2.2 min on 4 workers):
+- Current coverage (all green, 17 tests against prod):
   - `artist-mode.spec.ts` — artist writes prompt, others guess, score award
   - `auto-submit.spec.ts` — typed-but-not-clicked guess fires on timer expiry
   - `chat.spec.ts` — two-player lobby chat roundtrip
   - `create-and-join.spec.ts` — baseline lobby flow
+  - `daily.spec.ts` — /daily puzzle visit, guess, share, leaderboard
   - `full-round.spec.ts` — 2-player single round with Gemini
+  - `host-controls.spec.ts` — host kicks a player + transfers host
   - `invite-link.spec.ts` — opening `/play/<code>` as a fresh visitor
   - `multi-round.spec.ts` — 3 players, 2 rounds, everyone-submitted finalize, scoreboard rollover
   - `play-again.spec.ts` — game-over → reset → second game
   - `realtime-lobby.spec.ts` — host sees joiner within a few seconds
+  - `recap.spec.ts` — flipboard tokens render with role classes, top-guess callout visible
+  - `sfx.spec.ts` — mute toggle works, submit/imageLand/winnerCheer sfx fire
   - `spectator.spec.ts` — mid-game visitor joins as watch-only
+  - `theme-packs.spec.ts` — pack selector propagates to lobby pill; artist mode hides it
 - Tests create throwaway rooms each run. No cleanup step is needed.
+- Supabase's free-tier anon-auth rate limit bites when running >3 workers. Prefer `--workers=2` locally; prod is fine at default parallelism because tests run less often.
 
 ## Services
 
 - **Supabase project**: `cuevgbducxnbdslbhlxe`. Linked via CLI. Management API token at `~/.supabase/access-token`. Direct SQL via `curl https://api.supabase.com/v1/projects/$PROJECT/database/query -H "Authorization: Bearer $ACCESS_TOKEN" -d '{"query":"…"}'`.
 - **Vercel project**: `prj_bbIji7EWthbnG135XzhFl2CNr6K7` on team `team_9PBy4biwS1zFp6lsUZBEwjMh` (tehreets-projects). CLI authed as user `tehreet`.
 - **GitHub**: `tehreet/promptionary`, default branch `main`. `gh` CLI is authed.
-- **Domain**: `promptionary.io` on Namecheap. DNS needs: delete the parking A record (`162.255.119.141`), add TXT verification records for apex + www, keep A records `216.150.1.1` / `216.150.16.1`, keep CNAME `www → cname.vercel-dns.com.` Pending user action.
+- **Domain**: `promptionary.io` on Namecheap, DNS live and verified on Vercel. Records: A `@ → 216.150.1.1 / 216.150.16.1`, CNAME `www → cname.vercel-dns.com.`, plus two `_vercel` TXT verification records. `www` 308-redirects to apex.
 
 ## Gotchas / hard-learned rules
 
@@ -124,23 +130,10 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 
 - Proper Realtime via private channels + `realtime.messages` RLS (CHANNEL_ERROR rabbit hole)
 - Teams mode (enum slot `'teams'` exists; no gameplay)
-- Host migration when host disconnects
-- Kick / promote player controls
 - Sign-in accounts (Google / Discord / Sign in with Vercel)
 - pg_cron tick as a disconnection safety net for phase transitions
 - Rate limits on room creation
 - Moderation pass on artist-mode prompts
 - PWA manifest
-- promptionary.io DNS is one user action away (see Services)
-
-## Feature batch — ready to pick up next
-
-User greenlit these for the next session:
-
-1. **Sound effects** — ding on submit, whoosh on image land, crowd cheer on game-over winner. Web Audio API, tiny SFX pack.
-2. **Round recap animation** — flipboard-style prompt reveal, word by word, colored by role (subject/style/modifier/filler). Also: "🎯 nailed it" callout on top-scoring guess.
-3. **Kick + make-host controls** — host-only RPCs (`kick_player`, `transfer_host`), host-only buttons in the lobby/game player list, auto-transfer on host leave.
-4. **Theme packs** — food / wildlife / history / absurd / mixed. Each pack filters the subject/setting pools in `lib/prompt-dimensions.ts`. `rooms.pack` column, toggle on create-room card, visible in lobby.
-5. **Daily puzzle** — single shared prompt per day, solo play, worldwide leaderboard, shareable result card. Needs a Vercel cron + `/daily` route + daily-prompts table.
 
 **All features ship with e2e tests.** Write the test alongside the feature; don't treat it as a follow-up.
