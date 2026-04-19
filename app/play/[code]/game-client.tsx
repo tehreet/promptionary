@@ -154,6 +154,11 @@ function GameClientInner({
   const [promptTokens, setPromptTokens] = useState<PromptToken[]>([]);
   const [highlights, setHighlights] = useState<RoundHighlight[]>([]);
   const [submissionCount, setSubmissionCount] = useState<number>(0);
+  const [spectatorVotes, setSpectatorVotes] = useState<
+    Array<{ spectator_id: string; voted_player_id: string }>
+  >([]);
+  const [myVoteSubmitting, setMyVoteSubmitting] = useState<boolean>(false);
+  const [voteError, setVoteError] = useState<string | null>(null);
   const isHost = room.host_id === currentPlayerId;
 
   const competitorCount = useMemo(
@@ -423,9 +428,18 @@ function GameClientInner({
     if (revealAdvanceRef.current === key) return;
     revealAdvanceRef.current = key;
     const isFinalRound = room.round_num >= room.max_rounds;
+    const roundIdForResolve = currentRound?.id;
     (async () => {
       try {
         const supabase = supabaseRef.current;
+        // Resolve spectator votes before advancing so the +5 bonus lands on
+        // this round's scores. Idempotent via sentinel guard in the RPC — safe
+        // to call even when there were no spectators or no tie.
+        if (roundIdForResolve) {
+          await supabase.rpc("resolve_spectator_votes", {
+            p_round_id: roundIdForResolve,
+          });
+        }
         if (isFinalRound) {
           await supabase
             .from("rooms")
@@ -446,6 +460,7 @@ function GameClientInner({
     room.id,
     room.round_num,
     room.max_rounds,
+    currentRound?.id,
   ]);
 
   // When entering reveal phase, fetch all scored guesses + role tokens so
@@ -711,6 +726,93 @@ function GameClientInner({
     !isSpectator &&
     typeof myTeam === "number" &&
     ["generating", "guessing", "prompting", "scoring"].includes(room.phase);
+  // Tiebreaker: top two guesses within 5 pts AND both > 0. Spectators get a
+  // vote UI; players see a "spectators are voting" badge. Vote window = the
+  // existing reveal_seconds, no extension.
+  const tiebreaker = useMemo(() => {
+    if (room.phase !== "reveal") return null;
+    if (guessesFromReveal.length < 2) return null;
+    const top1 = guessesFromReveal[0];
+    const top2 = guessesFromReveal[1];
+    if (top1.total_score <= 0 || top2.total_score <= 0) return null;
+    if (top1.total_score - top2.total_score > 5) return null;
+    return { top1, top2 };
+  }, [room.phase, guessesFromReveal]);
+  const hasSpectators = spectators.length > 0;
+  const tiebreakerActive = !!tiebreaker && hasSpectators;
+  const myVote = useMemo(
+    () =>
+      spectatorVotes.find((v) => v.spectator_id === currentPlayerId)?.voted_player_id ?? null,
+    [spectatorVotes, currentPlayerId],
+  );
+  const voteCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const v of spectatorVotes) {
+      counts.set(v.voted_player_id, (counts.get(v.voted_player_id) ?? 0) + 1);
+    }
+    return counts;
+  }, [spectatorVotes]);
+
+  // Subscribe to spectator_votes for this round so the tally updates live.
+  useEffect(() => {
+    if (room.phase !== "reveal") {
+      setSpectatorVotes([]);
+      setVoteError(null);
+      return;
+    }
+    if (!currentRound?.id) return;
+    const supabase = supabaseRef.current;
+    let cancel = false;
+    const fetchVotes = async () => {
+      const { data } = await supabase
+        .from("spectator_votes")
+        .select("spectator_id, voted_player_id")
+        .eq("round_id", currentRound.id);
+      if (!cancel && data) {
+        // Filter out the sentinel resolution marker (all-zero UUIDs).
+        const ZERO = "00000000-0000-0000-0000-000000000000";
+        setSpectatorVotes(
+          (data as Array<{ spectator_id: string; voted_player_id: string }>)
+            .filter((v) => v.spectator_id !== ZERO),
+        );
+      }
+    };
+    fetchVotes();
+    const poll = setInterval(fetchVotes, 1500);
+    return () => {
+      cancel = true;
+      clearInterval(poll);
+    };
+  }, [room.phase, currentRound?.id]);
+
+  const castVote = useCallback(
+    async (playerId: string) => {
+      if (!currentRound?.id) return;
+      if (myVote) return;
+      setMyVoteSubmitting(true);
+      setVoteError(null);
+      const supabase = supabaseRef.current;
+      const { error } = await supabase.rpc("cast_spectator_vote", {
+        p_round_id: currentRound.id,
+        p_voted_player_id: playerId,
+      });
+      if (error) {
+        setVoteError(error.message);
+      } else {
+        // Optimistic local update — the poll will confirm it shortly.
+        setSpectatorVotes((prev) => {
+          if (prev.some((v) => v.spectator_id === currentPlayerId)) return prev;
+          return [
+            ...prev,
+            { spectator_id: currentPlayerId, voted_player_id: playerId },
+          ];
+        });
+      }
+      setMyVoteSubmitting(false);
+    },
+    [currentRound?.id, myVote, currentPlayerId],
+  );
+
   const teamLeaderboard = useMemo(() => {
     if (!isTeams) return [] as Array<{
       team: 1 | 2;
@@ -998,6 +1100,21 @@ function GameClientInner({
             <PromptFlipboard
               prompt={currentRound.prompt}
               tokens={promptTokens}
+            />
+          )}
+          {tiebreakerActive && tiebreaker && (
+            <SpectatorTiebreaker
+              top1={tiebreaker.top1}
+              top2={tiebreaker.top2}
+              top1Player={playerById.get(tiebreaker.top1.player_id)}
+              top2Player={playerById.get(tiebreaker.top2.player_id)}
+              isSpectator={isSpectator}
+              myVote={myVote}
+              voteCounts={voteCounts}
+              totalVotes={spectatorVotes.length}
+              onVote={castVote}
+              submitting={myVoteSubmitting}
+              error={voteError}
             />
           )}
           <ul className="w-full space-y-2">
@@ -1523,6 +1640,121 @@ function ArtistPromptingView({
       </p>
       {room.phase_ends_at && (
         <p className="text-2xl font-black font-mono opacity-90">{remaining}s</p>
+      )}
+    </div>
+  );
+}
+
+function SpectatorTiebreaker({
+  top1,
+  top2,
+  top1Player,
+  top2Player,
+  isSpectator,
+  myVote,
+  voteCounts,
+  totalVotes,
+  onVote,
+  submitting,
+  error,
+}: {
+  top1: Guess;
+  top2: Guess;
+  top1Player: Player | undefined;
+  top2Player: Player | undefined;
+  isSpectator: boolean;
+  myVote: string | null;
+  voteCounts: Map<string, number>;
+  totalVotes: number;
+  onVote: (playerId: string) => void;
+  submitting: boolean;
+  error: string | null;
+}) {
+  if (!isSpectator) {
+    return (
+      <div
+        data-tiebreaker-badge="1"
+        className="w-full rounded-2xl border-2 border-[color:var(--game-pink)]/60 bg-[color:var(--game-pink)]/10 px-4 py-2 text-center text-sm font-bold text-[color:var(--game-pink)]"
+      >
+        Spectators are voting! Top two within 5 pts.
+        {totalVotes > 0 && (
+          <span className="ml-2 font-mono opacity-80">
+            {totalVotes} vote{totalVotes === 1 ? "" : "s"} in
+          </span>
+        )}
+      </div>
+    );
+  }
+  const c1 = voteCounts.get(top1.player_id) ?? 0;
+  const c2 = voteCounts.get(top2.player_id) ?? 0;
+  const voted = !!myVote;
+  return (
+    <div
+      data-tiebreaker-vote="1"
+      className="w-full rounded-2xl border-2 border-[color:var(--game-pink)] bg-[color:var(--game-paper)] p-4 flex flex-col gap-3 text-[var(--game-ink)]"
+    >
+      <p className="text-center text-sm font-black uppercase tracking-widest">
+        Who nailed it?
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {[
+          { guess: top1, player: top1Player, count: c1 },
+          { guess: top2, player: top2Player, count: c2 },
+        ].map(({ guess, player, count }) => {
+          const mine = myVote === guess.player_id;
+          return (
+            <button
+              key={guess.id}
+              type="button"
+              data-tiebreaker-option={guess.player_id}
+              disabled={voted || submitting}
+              onClick={() => onVote(guess.player_id)}
+              className={`rounded-xl border-2 px-3 py-3 text-left flex flex-col gap-1 transition-transform hover:-translate-y-0.5 disabled:hover:translate-y-0 disabled:opacity-80 disabled:cursor-not-allowed ${
+                mine
+                  ? "border-[color:var(--game-pink)] bg-[color:var(--game-pink)]/15"
+                  : "border-[var(--game-ink)] bg-[var(--game-paper)]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className="player-chip h-7 w-7 text-xs"
+                  style={{
+                    ["--chip-color" as string]: colorForPlayer(guess.player_id),
+                  } as React.CSSProperties}
+                >
+                  {player?.display_name[0]?.toUpperCase()}
+                </span>
+                <span className="font-heading font-black text-sm truncate">
+                  {player?.display_name ?? "—"}
+                </span>
+                <span className="ml-auto font-mono font-black text-sm">
+                  {guess.total_score}
+                </span>
+              </div>
+              <p className="text-xs italic opacity-80 line-clamp-2">
+                &ldquo;{guess.guess}&rdquo;
+              </p>
+              <p className="text-[10px] uppercase tracking-widest opacity-70">
+                {count} vote{count === 1 ? "" : "s"}
+                {mine ? " · your vote" : ""}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+      {voted ? (
+        <p className="text-center text-xs opacity-80">
+          Thanks — waiting for other spectators.
+        </p>
+      ) : (
+        <p className="text-center text-xs opacity-70">
+          Majority wins the winning guess a +5 bonus.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-center text-xs text-red-600">
+          {error}
+        </p>
       )}
     </div>
   );
