@@ -29,7 +29,7 @@ export function LoadingPhrases({
     <p
       key={i}
       data-loading-phrase="1"
-      className={`loading-phrase text-base opacity-80 ${className}`}
+      className={`loading-phrase font-heading italic text-base text-[var(--game-cream)] ${className}`}
       aria-live="polite"
     >
       {phrase}

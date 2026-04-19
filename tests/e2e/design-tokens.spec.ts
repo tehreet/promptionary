@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createRoomAs } from "./helpers";
+import { createRoomAs, joinRoomAs } from "./helpers";
 
 test.describe("design tokens", () => {
   test("landing still renders with foreground + background tokens applied", async ({ page }) => {
@@ -26,5 +26,33 @@ test.describe("design tokens", () => {
     const code = await createRoomAs(page, `Spec${Date.now()}`);
     await page.goto(`/play/${code}`);
     await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
+  });
+
+  test("in-game (non-lobby) flips main to game-canvas-dark", async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const hostCtx = await browser.newContext();
+    const host = await hostCtx.newPage();
+    const code = await createRoomAs(host, `Host${Date.now()}`, {
+      maxRounds: 1,
+      revealSeconds: 5,
+    });
+    const joinerCtx = await browser.newContext();
+    const joiner = await joinerCtx.newPage();
+    await joinRoomAs(joiner, code, `Guesser${Date.now()}`);
+
+    await host.getByRole("button", { name: /Start game/ }).click();
+
+    // Whichever phase lands first after lobby — prompting, generating, or
+    // guessing — all use game-canvas-dark. Don't assume party-mode.
+    await host.waitForSelector("main.game-canvas-dark", { timeout: 60_000 });
+    await expect(host.locator("main").first()).toHaveClass(/game-canvas-dark/);
+
+    // Player-chip rail replaces the old text-white/bg-inline avatar circles.
+    await expect(host.locator(".player-chip").first()).toBeVisible();
+
+    await hostCtx.close();
+    await joinerCtx.close();
   });
 });

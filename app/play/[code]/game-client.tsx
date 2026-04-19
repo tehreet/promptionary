@@ -46,8 +46,8 @@ type Player = {
 };
 
 const TEAM_META: Record<1 | 2, { label: string; color: string }> = {
-  1: { label: "Team 1", color: "#6366f1" },
-  2: { label: "Team 2", color: "#f43f5e" },
+  1: { label: "Team 1", color: "var(--team-1)" },
+  2: { label: "Team 2", color: "var(--team-2)" },
 };
 
 type Round = {
@@ -584,7 +584,13 @@ function GameClientInner({
   }, [competitors, isTeams]);
 
   return (
-    <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-6 px-6 py-10">
+    <main
+      className={`min-h-screen flex flex-col items-center gap-6 px-6 py-10 ${
+        room.phase === "reveal" || room.phase === "game_over"
+          ? "game-canvas-page"
+          : "game-canvas-dark"
+      }`}
+    >
       <header className="w-full max-w-4xl flex items-center justify-between gap-2">
         <div>
           <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted-foreground">
@@ -611,7 +617,7 @@ function GameClientInner({
 
       {/* Running scoreboard — visible every phase except game_over (which has its own) */}
       {room.phase !== "game_over" && leaderboard.length > 0 && (
-        <section className="w-full max-w-4xl rounded-2xl bg-card border border-border shadow-sm px-4 py-3 text-foreground">
+        <section className="w-full max-w-4xl">
           {isTeams && (
             <div
               data-team-scoreboard="1"
@@ -621,7 +627,7 @@ function GameClientInner({
                 <div
                   key={t.team}
                   data-team-chip={t.team}
-                  className="rounded-full border-2 px-4 py-1 text-sm font-black flex items-center gap-2"
+                  className="rounded-full border-2 px-4 py-1 text-sm font-black flex items-center gap-2 bg-[var(--game-paper)]"
                   style={{
                     borderColor: TEAM_META[t.team].color,
                     color: TEAM_META[t.team].color,
@@ -633,7 +639,7 @@ function GameClientInner({
               ))}
             </div>
           )}
-          <ul className="flex flex-wrap items-center gap-3 justify-center">
+          <ul className="flex gap-3 overflow-x-auto pb-2 justify-start sm:justify-center">
             {leaderboard.map((p, i) => {
               const teamColor =
                 isTeams && (p.team === 1 || p.team === 2)
@@ -643,28 +649,28 @@ function GameClientInner({
                 <li
                   key={p.player_id}
                   data-team={p.team ?? undefined}
-                  className="flex items-center gap-2 rounded-full bg-muted text-foreground pl-3 pr-2 py-1"
+                  className="game-card bg-[var(--game-paper)] flex items-center gap-2 px-3 py-2 shrink-0"
                   style={
                     teamColor
-                      ? {
-                          boxShadow: `inset 0 0 0 2px ${teamColor}`,
-                        }
+                      ? ({ ["--team-accent" as string]: teamColor, outline: `2px solid ${teamColor}` } as React.CSSProperties)
                       : undefined
                   }
                 >
-                  <span className="text-xs opacity-60 font-black w-4 text-right">
+                  <span className="text-xs opacity-60 font-black w-4 text-right text-[var(--game-ink)]">
                     {i + 1}
                   </span>
                   <span
-                    className="h-6 w-6 rounded-full flex items-center justify-center text-black text-xs font-black"
-                    style={{ background: colorForPlayer(p.player_id) }}
+                    className="player-chip w-8 h-8 text-xs"
+                    style={{ ["--chip-color" as string]: colorForPlayer(p.player_id) } as React.CSSProperties}
                   >
                     {p.display_name[0]?.toUpperCase()}
                   </span>
-                  <span className="text-sm font-semibold truncate max-w-[8rem]">
+                  <span className="font-heading font-bold text-sm text-[var(--game-ink)] truncate max-w-[8rem]">
                     {p.display_name}
                   </span>
-                  <span className="font-black font-mono">{p.score}</span>
+                  <span className="font-mono font-black text-sm text-[var(--game-ink)]">
+                    {p.score}
+                  </span>
                   {isHost && p.player_id !== currentPlayerId && (
                     <HostControls
                       roomId={room.id}
@@ -728,10 +734,12 @@ function GameClientInner({
             <div className="flex items-center gap-2 text-sm opacity-90">
               <span>Prompt by</span>
               <span
-                className="h-6 w-6 rounded-full flex items-center justify-center text-black text-xs font-black"
+                className="player-chip h-6 w-6 text-xs"
                 style={{
-                  background: colorForPlayer(currentRound.artist_player_id),
-                }}
+                  ["--chip-color" as string]: colorForPlayer(
+                    currentRound.artist_player_id,
+                  ),
+                } as React.CSSProperties}
               >
                 {playerById
                   .get(currentRound.artist_player_id)
@@ -747,15 +755,20 @@ function GameClientInner({
             <p className="text-lg font-semibold opacity-90">
               Submissions: {submissionCount}/{submissionTotal}
             </p>
-            <p className="text-3xl font-black font-mono">{remaining}s</p>
+            <span className="marquee-pill">
+              <span className="live-dot" aria-hidden />
+              {remaining}s
+            </span>
           </div>
           {currentRound?.image_url && (
             <LiveCursorsOverlay>
-              <img
-                src={currentRound.image_url}
-                alt="Round"
-                className="w-full rounded-3xl shadow-xl border-4 border-border"
-              />
+              <div className="game-frame bg-[var(--game-paper)] p-2 inline-block">
+                <img
+                  src={currentRound.image_url}
+                  alt="Round painting"
+                  className="rounded-[10px] block max-w-full h-auto"
+                />
+              </div>
             </LiveCursorsOverlay>
           )}
           {isSpectator ? (
@@ -904,10 +917,12 @@ function GameClientInner({
                                 className="rounded-full bg-card border border-border px-3 py-1 text-xs flex items-center gap-2"
                               >
                                 <span
-                                  className="h-5 w-5 rounded-full flex items-center justify-center text-black font-black text-[10px]"
+                                  className="player-chip h-5 w-5 text-[10px]"
                                   style={{
-                                    background: colorForPlayer(m.player_id),
-                                  }}
+                                    ["--chip-color" as string]: colorForPlayer(
+                                      m.player_id,
+                                    ),
+                                  } as React.CSSProperties}
                                 >
                                   {m.display_name[0]?.toUpperCase()}
                                 </span>
@@ -990,8 +1005,10 @@ function GuessRow({
         {rank}
       </span>
       <span
-        className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-black font-black"
-        style={{ background: colorForPlayer(guess.player_id) }}
+        className="player-chip h-8 w-8 shrink-0 text-sm"
+        style={{
+          ["--chip-color" as string]: colorForPlayer(guess.player_id),
+        } as React.CSSProperties}
       >
         {player?.display_name[0]?.toUpperCase()}
       </span>
@@ -1038,8 +1055,10 @@ function LeaderboardRow({
     <li className="flex items-center gap-3 rounded-xl px-3 py-2 bg-muted text-foreground">
       <span className="w-6 text-center font-black opacity-70">{rank}</span>
       <span
-        className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-black font-black"
-        style={{ background: colorForPlayer(player.player_id) }}
+        className="player-chip h-8 w-8 shrink-0 text-sm"
+        style={{
+          ["--chip-color" as string]: colorForPlayer(player.player_id),
+        } as React.CSSProperties}
       >
         {player.display_name[0]?.toUpperCase()}
       </span>
@@ -1128,7 +1147,7 @@ function PlayAgainControls({ room, isHost }: { room: Room; isHost: boolean }) {
         </button>
       </div>
       {error && (
-        <div className="text-sm bg-red-500/30 rounded-xl p-3 text-center">
+        <div className="game-card bg-destructive/20 border-destructive text-destructive-foreground p-4 text-sm text-center">
           {error}
         </div>
       )}
@@ -1258,7 +1277,9 @@ function ArtistPromptingView({
               <span>⌘/Ctrl + Enter to send</span>
             </div>
             {error && (
-              <div className="text-sm bg-red-500/30 rounded-xl p-3">{error}</div>
+              <div className="game-card bg-destructive/20 border-destructive text-destructive-foreground p-4 text-sm">
+                {error}
+              </div>
             )}
             <Button
               type="submit"
