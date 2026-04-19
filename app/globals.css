@@ -234,22 +234,27 @@
      Jackbox sticker-card system — sitewide grammar.
      --------------------------------------------------------------- */
 
-  /* Canvas utilities. `page` variant force-locks light mode for the
-     yellow marketing canvas; the other two flip with the dark class. */
+  /* Canvas utilities. `page` = yellow paper, always light. Other two
+     flip with the .dark class on html. */
   .game-canvas-page {
-    /* Yellow paper canvas — always reads as a light surface (even though
-       the site is now force-dark), so hardcode navy ink for text. */
-    background: #ffe15e;
-    color: #1e1b4d;
+    /* Force all game-palette CSS vars back to their light values inside
+       this subtree so the yellow canvas stays a light surface even when
+       the rest of the site is in dark mode. Any descendant using
+       var(--game-ink) / var(--game-cream) etc. resolves to the values
+       below regardless of the .dark class on html. */
+    --game-canvas-yellow: #ffe15e;
+    --game-canvas-warm: #fff7d6;
+    --game-canvas-dark: #1e1b4d;
+    --game-ink: #1e1b4d;
+    --game-ink-soft: #3d2a7d;
+    --game-cream: #fff7d6;
+    --game-paper: #ffffff;
+    --game-pink: #ff5eb4;
+    --game-cyan: #3ddce0;
+    --game-orange: #ff8b3d;
+    background: var(--game-canvas-yellow);
+    color: var(--game-ink);
     color-scheme: light;
-  }
-  .game-canvas-page .game-card,
-  .game-canvas-page .sticker {
-    border-color: #1e1b4d;
-    box-shadow: 4px 4px 0 #1e1b4d;
-  }
-  .game-canvas-page .game-hero {
-    color: #1e1b4d;
   }
   .game-canvas {
     background: var(--game-canvas-warm);
