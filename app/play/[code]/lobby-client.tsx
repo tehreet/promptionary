@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { colorForPlayer } from "@/lib/player";
 import { leaveRoomAction } from "@/app/actions/leave-room";
 import { InviteCard } from "./invite-card";
+import { RoomChannelProvider } from "@/lib/room-channel";
+import { ChatPanel } from "@/components/chat-panel";
 
 type Room = {
   id: string;
@@ -25,7 +27,30 @@ type Player = {
   score: number;
 };
 
-export function LobbyClient({
+export function LobbyClient(props: {
+  room: Room;
+  initialPlayers: Player[];
+  currentPlayerId: string;
+}) {
+  const me = props.initialPlayers.find(
+    (p) => p.player_id === props.currentPlayerId,
+  );
+  const playerCtx = useMemo(
+    () => ({
+      id: props.currentPlayerId,
+      name: me?.display_name ?? "You",
+      color: colorForPlayer(props.currentPlayerId),
+    }),
+    [props.currentPlayerId, me?.display_name],
+  );
+  return (
+    <RoomChannelProvider roomId={props.room.id} player={playerCtx}>
+      <LobbyClientInner {...props} />
+    </RoomChannelProvider>
+  );
+}
+
+function LobbyClientInner({
   room,
   initialPlayers,
   currentPlayerId,
@@ -48,7 +73,7 @@ export function LobbyClient({
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
 
-    const playersChannel = supabase
+    const channel = supabase
       .channel(`room-${room.id}-players`)
       .on(
         "postgres_changes",
@@ -79,10 +104,6 @@ export function LobbyClient({
           });
         },
       )
-      .subscribe();
-
-    const roomChannel = supabase
-      .channel(`room-${room.id}-state`)
       .on(
         "postgres_changes",
         {
@@ -98,8 +119,9 @@ export function LobbyClient({
       )
       .subscribe();
 
-    // Poll every 2s as a fallback in case the Postgres Changes stream lags or
-    // drops events. Cheap and bounded (one small query).
+    // Poll fallback — realtime events aren't always delivered promptly on
+    // Supabase's current Postgres Changes path for RLS-gated tables, so we
+    // backstop with a 2s poll.
     const poll = setInterval(async () => {
       const { data } = await supabase
         .from("room_players")
@@ -116,8 +138,7 @@ export function LobbyClient({
 
     return () => {
       clearInterval(poll);
-      supabase.removeChannel(playersChannel);
-      supabase.removeChannel(roomChannel);
+      supabase.removeChannel(channel);
     };
   }, [room.id]);
 
@@ -207,6 +228,10 @@ export function LobbyClient({
           Game in progress — phase: {phase}
         </div>
       )}
+
+      <div className="w-full max-w-md">
+        <ChatPanel roomPhase={phase} isSpectator={false} variant="inline" />
+      </div>
     </main>
   );
 }

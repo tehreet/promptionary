@@ -71,6 +71,41 @@ export type Database = {
           },
         ]
       }
+      room_messages: {
+        Row: {
+          content: string
+          created_at: string
+          display_name: string
+          id: string
+          player_id: string
+          room_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          display_name: string
+          id?: string
+          player_id: string
+          room_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          player_id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_players: {
         Row: {
           display_name: string
@@ -295,6 +330,11 @@ export type Database = {
         }
         Returns: undefined
       }
+      post_message: {
+        Args: { p_content: string; p_room_id: string }
+        Returns: string
+      }
+      realtime_topic_room: { Args: { topic: string }; Returns: string }
       start_round: { Args: { p_room_id: string }; Returns: string }
       submit_artist_prompt: {
         Args: { p_prompt: string; p_round_id: string }

@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import confetti from "canvas-confetti";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAnimatedNumber } from "@/lib/animation";
+import { RoomChannelProvider } from "@/lib/room-channel";
+import { LiveCursorsOverlay } from "@/components/live-cursors";
+import { ChatPanel } from "@/components/chat-panel";
+import { ReactionsBar } from "@/components/reactions-bar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { colorForPlayer } from "@/lib/player";
@@ -72,7 +76,29 @@ function useCountdown(endsAt: string | null): number {
   return remaining;
 }
 
-export function GameClient({
+export function GameClient(props: {
+  room: Room;
+  players: Player[];
+  currentPlayerId: string;
+  isSpectator?: boolean;
+}) {
+  const me = props.players.find((p) => p.player_id === props.currentPlayerId);
+  const playerCtx = useMemo(
+    () => ({
+      id: props.currentPlayerId,
+      name: me?.display_name ?? "You",
+      color: colorForPlayer(props.currentPlayerId),
+    }),
+    [props.currentPlayerId, me?.display_name],
+  );
+  return (
+    <RoomChannelProvider roomId={props.room.id} player={playerCtx}>
+      <GameClientInner {...props} />
+    </RoomChannelProvider>
+  );
+}
+
+function GameClientInner({
   room: initialRoom,
   players: initialPlayers,
   currentPlayerId,
@@ -622,11 +648,13 @@ export function GameClient({
             <p className="text-3xl font-black font-mono">{remaining}s</p>
           </div>
           {currentRound?.image_url && (
-            <img
-              src={currentRound.image_url}
-              alt="Round"
-              className="w-full rounded-3xl shadow-xl border-4 border-border"
-            />
+            <LiveCursorsOverlay>
+              <img
+                src={currentRound.image_url}
+                alt="Round"
+                className="w-full rounded-3xl shadow-xl border-4 border-border"
+              />
+            </LiveCursorsOverlay>
           )}
           {isSpectator ? (
             <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-4 text-center">
@@ -693,12 +721,16 @@ export function GameClient({
               Next round in <span className="font-mono font-black">{remaining}s</span>
             </p>
           )}
+          <ReactionsBarWrapper />
+
           {currentRound?.image_url && (
-            <img
-              src={currentRound.image_url}
-              alt="Round"
-              className="w-full rounded-3xl shadow-xl border-4 border-border"
-            />
+            <LiveCursorsOverlay>
+              <img
+                src={currentRound.image_url}
+                alt="Round"
+                className="w-full rounded-3xl shadow-xl border-4 border-border"
+              />
+            </LiveCursorsOverlay>
           )}
           {currentRound?.prompt && (
             <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-5 text-center">
@@ -736,7 +768,21 @@ export function GameClient({
           )}
         </section>
       )}
+      <ChatPanel
+        roomPhase={room.phase}
+        isSpectator={isSpectator}
+        variant="floating"
+      />
     </main>
+  );
+}
+
+function ReactionsBarWrapper() {
+  const ref = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={ref} className="w-full flex justify-center">
+      <ReactionsBar targetRef={ref} />
+    </div>
   );
 }
 
