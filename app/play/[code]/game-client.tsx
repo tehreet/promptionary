@@ -670,6 +670,7 @@ function GameClientInner({
                       roomId={room.id}
                       victimId={p.player_id}
                       victimName={p.display_name}
+                      roomPhase={room.phase}
                     />
                   )}
                 </li>

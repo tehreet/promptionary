@@ -9,12 +9,14 @@ export function HostControls({
   victimName,
   canMakeHost = true,
   canKick = true,
+  roomPhase,
 }: {
   roomId: string;
   victimId: string;
   victimName: string;
   canMakeHost?: boolean;
   canKick?: boolean;
+  roomPhase?: string;
 }) {
   const supabaseRef = useRef(createSupabaseBrowserClient());
   const [busy, setBusy] = useState(false);
@@ -42,15 +44,22 @@ export function HostControls({
     setBusy(false);
   }
 
+  // Disable manual host transfer during active gameplay (phase != 'lobby')
+  const canTransferHost = canMakeHost && roomPhase === "lobby";
+  const transferDisabledReason =
+    canMakeHost && roomPhase !== "lobby"
+      ? "Host transfer is locked during gameplay"
+      : "Make host";
+
   return (
     <div className="flex items-center gap-1 ml-auto shrink-0">
       {canMakeHost && (
         <button
           type="button"
           onClick={makeHost}
-          disabled={busy}
+          disabled={busy || !canTransferHost}
           aria-label={`Make ${victimName} host`}
-          title="Make host"
+          title={transferDisabledReason}
           className="h-7 w-7 rounded-full bg-muted hover:bg-accent text-foreground inline-flex items-center justify-center text-xs disabled:opacity-50"
         >
           👑

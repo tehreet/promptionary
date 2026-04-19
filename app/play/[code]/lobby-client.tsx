@@ -378,6 +378,7 @@ function LobbyClientInner({
                           roomId={room.id}
                           victimId={p.player_id}
                           victimName={p.display_name}
+                          roomPhase={phase}
                         />
                       )}
                     </li>
@@ -441,6 +442,7 @@ function LobbyClientInner({
                     roomId={room.id}
                     victimId={p.player_id}
                     victimName={p.display_name}
+                    roomPhase={phase}
                   />
                 )}
               </li>
