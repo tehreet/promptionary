@@ -367,7 +367,7 @@ function LobbyClientInner({
                       >
                         {p.display_name.slice(0, 2).toUpperCase()}
                       </span>
-                      <span className="font-heading font-bold truncate flex-1">
+                      <span className="font-heading font-bold flex-1 break-words min-w-0">
                         {p.display_name}
                       </span>
                       {p.is_host && (
@@ -473,7 +473,7 @@ function LobbyClientInner({
                 >
                   {p.display_name.slice(0, 2).toUpperCase()}
                 </span>
-                <span className="font-heading font-bold flex-1 truncate">
+                <span className="font-heading font-bold flex-1 break-words min-w-0">
                   {p.display_name}
                 </span>
                 {p.is_host && (
