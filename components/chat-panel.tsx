@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRoomChannel } from "@/lib/room-channel";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { colorForPlayer } from "@/lib/player";
 
 type ChatMessage = {
@@ -148,55 +149,65 @@ export function ChatPanel({
     <div className="flex flex-col h-full">
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"
+        className="flex-1 overflow-y-auto px-1 py-2 space-y-2"
       >
         {messages.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">
+          <p className="text-xs text-[var(--game-ink)]/60 italic">
             Chat is quiet. Say hi.
           </p>
         ) : (
           messages.map((m) => (
-            <div key={m.id} className="text-sm leading-snug">
-              <span
-                className="font-bold mr-2"
-                style={{ color: colorForPlayer(m.player_id) }}
-              >
-                {m.display_name}
-              </span>
-              <span className="text-foreground/90 break-words">{m.content}</span>
+            <div key={m.id} className="flex gap-3 items-start">
+              <div
+                className="w-1 self-stretch rounded-full shrink-0"
+                style={{ background: colorForPlayer(m.player_id) }}
+              />
+              <div className="min-w-0 flex-1">
+                <span
+                  className="font-heading font-black text-sm"
+                  style={{ color: colorForPlayer(m.player_id) }}
+                >
+                  {m.display_name}
+                </span>
+                <p className="text-sm text-[var(--game-ink)] break-words">
+                  {m.content}
+                </p>
+              </div>
             </div>
           ))
         )}
       </div>
-      <form
-        onSubmit={send}
-        className="border-t border-border p-2 flex gap-2 bg-card/60"
-      >
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={
-            locked
-              ? "Chat locked during the round — talk after reveal"
-              : "Say something…"
-          }
-          maxLength={400}
-          disabled={locked || posting}
-          className="flex-1 bg-background border border-input rounded-lg px-3 py-1.5 text-sm disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        <Button
-          type="submit"
-          disabled={locked || posting || !draft.trim()}
-          className="h-8 px-3 text-sm"
+      {locked ? (
+        <div
+          className="sticker w-full text-center mt-2"
+          style={{ background: "var(--game-orange)" }}
         >
-          Send
-        </Button>
-      </form>
+          Chat locked — guessing in progress
+        </div>
+      ) : (
+        <form onSubmit={send} className="mt-2 flex gap-2">
+          <Input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Say something…"
+            maxLength={400}
+            disabled={posting}
+            className="flex-1"
+          />
+          <Button
+            type="submit"
+            disabled={posting || !draft.trim()}
+            className="h-9 px-3 text-sm"
+          >
+            Send
+          </Button>
+        </form>
+      )}
       {sendError && (
         <div
           data-chat-error="1"
-          className="text-[11px] bg-red-500/20 border-t border-red-500/30 px-3 py-1.5"
+          className="text-[11px] mt-2 rounded-md bg-[var(--destructive)]/20 border-2 border-[var(--destructive)] px-2 py-1 text-[var(--game-ink)]"
         >
           {sendError}
         </div>
@@ -213,7 +224,7 @@ export function ChatPanel({
               setCollapsed(false);
               setUnread(0);
             }}
-            className="h-11 px-4 rounded-full font-bold shadow-lg"
+            className="h-11 px-4 rounded-full font-bold"
           >
             💬 Chat
             {unread > 0 && (
@@ -223,13 +234,13 @@ export function ChatPanel({
             )}
           </Button>
         ) : (
-          <div className="rounded-2xl bg-card border border-border shadow-xl flex flex-col h-[380px]">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+          <div className="game-card bg-[var(--game-paper)] text-[var(--game-ink)] p-4 flex flex-col gap-2 h-[380px]">
+            <div className="flex items-center justify-between">
               <p className="font-heading font-black text-sm">Chat</p>
               <button
                 type="button"
                 onClick={() => setCollapsed(true)}
-                className="text-xs text-muted-foreground hover:text-foreground"
+                className="text-xs text-[var(--game-ink)]/60 hover:text-[var(--game-ink)]"
               >
                 hide
               </button>
@@ -242,10 +253,8 @@ export function ChatPanel({
   }
 
   return (
-    <div className="w-full rounded-2xl bg-card border border-border shadow-sm flex flex-col h-[280px]">
-      <div className="px-3 py-2 border-b border-border">
-        <p className="font-heading font-black text-sm">Lobby chat</p>
-      </div>
+    <div className="game-card bg-[var(--game-paper)] text-[var(--game-ink)] p-4 flex flex-col gap-2 h-[280px]">
+      <p className="font-heading font-black text-sm">Lobby chat</p>
       {box}
     </div>
   );

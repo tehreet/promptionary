@@ -35,6 +35,27 @@ type LeaderRow = {
 
 type Token = { position: number; token: string; role: string };
 
+function formatTimeUntilMidnightUtc(now: Date): string {
+  const next = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
+  const ms = Math.max(0, next.getTime() - now.getTime());
+  const totalSeconds = Math.floor(ms / 1000);
+  const hh = Math.floor(totalSeconds / 3600);
+  const mm = Math.floor((totalSeconds % 3600) / 60);
+  const ss = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+}
+
 export function DailyClient(props: {
   date: string;
   imageUrl: string | null;
@@ -66,6 +87,9 @@ export function DailyClient(props: {
     rank: number;
   } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderRow[]>(props.leaderboard);
+  const [timeLeft, setTimeLeft] = useState<string>(() =>
+    formatTimeUntilMidnightUtc(new Date()),
+  );
 
   useEffect(() => {
     // Server-provided signed-in profile name wins over localStorage.
@@ -76,6 +100,13 @@ export function DailyClient(props: {
         : null;
     if (stored) setDisplayName(stored);
   }, [props.defaultName]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setTimeLeft(formatTimeUntilMidnightUtc(new Date()));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const alreadyDone = !!props.myGuess;
 
@@ -177,29 +208,39 @@ export function DailyClient(props: {
   return (
     <main
       data-daily-date={props.date}
-      className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-6 px-6 py-10"
+      className="min-h-screen game-canvas flex flex-col items-center gap-6 px-6 py-10"
     >
-      <header className="text-center space-y-1 max-w-2xl">
+      <header className="text-center space-y-3 max-w-2xl flex flex-col items-center">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
           Daily puzzle · {props.date}
         </p>
-        <h1 className="text-hero text-4xl sm:text-6xl">Today&rsquo;s prompt</h1>
+        <h1 className="game-hero text-4xl sm:text-6xl">
+          <span className="game-hero-mark">Today&rsquo;s</span> prompt
+        </h1>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           One shared prompt. One guess per person. Leaderboard resets at midnight UTC.
         </p>
+        <span className="marquee-pill" aria-live="polite">
+          <span className="live-dot" aria-hidden />
+          resets in {timeLeft}
+        </span>
       </header>
 
-      <div className="w-full max-w-xl">
+      <div className="w-full max-w-xl flex justify-center">
         {props.imageUrl ? (
-          <img
-            src={props.imageUrl}
-            alt="Today's daily puzzle"
-            className="w-full rounded-3xl shadow-xl border-4 border-border"
-          />
+          <div className="game-frame bg-[var(--game-paper)] p-2 inline-block">
+            <img
+              src={props.imageUrl}
+              alt="Today's daily puzzle"
+              className="rounded-[10px] block max-w-full h-auto"
+            />
+          </div>
         ) : (
-          <div className="aspect-square rounded-3xl bg-card border border-border flex flex-col items-center justify-center gap-3">
-            <div className="h-14 w-14 rounded-full border-4 border-muted border-t-foreground animate-spin" />
-            <p className="font-bold">Warming up today&rsquo;s image…</p>
+          <div className="game-frame bg-[var(--game-paper)] p-2 w-full">
+            <div className="aspect-square rounded-[10px] flex flex-col items-center justify-center gap-3">
+              <div className="h-14 w-14 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+              <p className="font-bold">Warming up today&rsquo;s image…</p>
+            </div>
           </div>
         )}
       </div>
@@ -210,7 +251,7 @@ export function DailyClient(props: {
             e.preventDefault();
             submit();
           }}
-          className="w-full max-w-xl flex flex-col gap-3 bg-card border border-border rounded-2xl p-4 shadow-sm"
+          className="w-full max-w-xl flex flex-col gap-3 game-card bg-[var(--game-paper)] p-5"
         >
           <div className="flex gap-2 items-end">
             <label className="flex-1 space-y-1">
@@ -222,6 +263,7 @@ export function DailyClient(props: {
                 onChange={(e) => setDisplayName(e.target.value)}
                 maxLength={24}
                 required
+                className="h-14 text-lg"
               />
             </label>
           </div>
@@ -244,7 +286,9 @@ export function DailyClient(props: {
             <span className="hidden sm:inline">⌘/Ctrl + Enter to submit</span>
           </div>
           {error && (
-            <div className="text-sm bg-red-500/30 rounded-xl p-3">{error}</div>
+            <div className="game-card bg-destructive/20 border-destructive text-destructive-foreground p-4 text-sm">
+              {error}
+            </div>
           )}
           <Button
             type="submit"
@@ -261,7 +305,7 @@ export function DailyClient(props: {
           data-daily-result="1"
           className="w-full max-w-xl flex flex-col gap-4"
         >
-          <div className="rounded-2xl bg-card border border-border shadow-sm p-5 flex flex-col items-center gap-2">
+          <div className="game-card bg-[var(--game-paper)] p-6 flex flex-col items-center gap-2">
             <p className="text-xs uppercase tracking-widest opacity-70">
               Your score
             </p>
@@ -285,38 +329,46 @@ export function DailyClient(props: {
           <h2 className="text-lg font-heading font-black text-foreground/80">
             Today&rsquo;s leaderboard
           </h2>
-          <ol className="space-y-1.5">
-            {leaderboard.map((row, i) => (
-              <li
-                key={row.id}
-                className={`rounded-xl px-3 py-2 border flex items-center gap-3 ${
-                  row.player_id === props.currentPlayerId
-                    ? "bg-accent border-[color:var(--brand-fuchsia)]/40"
-                    : "bg-card border-border"
-                }`}
-              >
-                <span className="w-6 text-center font-black text-muted-foreground text-sm">
-                  {i + 1}
-                </span>
-                <span
-                  className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-black text-xs font-black"
-                  style={{ background: colorForPlayer(row.player_id) }}
+          <ol className="flex flex-col gap-2">
+            {leaderboard.map((row, i) => {
+              const isMe = row.player_id === props.currentPlayerId;
+              return (
+                <li
+                  key={row.id}
+                  className="game-card bg-[var(--game-paper)] flex items-center gap-3 px-4 py-3"
+                  style={
+                    isMe
+                      ? ({
+                          background:
+                            "color-mix(in oklch, var(--game-cyan) 25%, var(--game-paper))",
+                        } as React.CSSProperties)
+                      : undefined
+                  }
                 >
-                  {row.display_name[0]?.toUpperCase()}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">
-                    {row.display_name}
-                  </p>
-                  <p className="text-xs italic text-foreground/70 truncate">
-                    &ldquo;{row.guess}&rdquo;
-                  </p>
-                </div>
-                <span className="font-heading font-black font-mono tabular-nums">
-                  {row.total_score}
-                </span>
-              </li>
-            ))}
+                  <span
+                    className="player-chip w-10 h-10 text-sm"
+                    style={
+                      {
+                        ["--chip-color" as string]: colorForPlayer(row.player_id),
+                      } as React.CSSProperties
+                    }
+                  >
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-heading font-bold truncate">
+                      {row.display_name}
+                    </p>
+                    <p className="text-xs italic text-foreground/70 truncate">
+                      &ldquo;{row.guess}&rdquo;
+                    </p>
+                  </div>
+                  <span className="font-mono text-lg text-[var(--game-ink)] tabular-nums">
+                    {row.total_score}
+                  </span>
+                </li>
+              );
+            })}
           </ol>
         </section>
       )}

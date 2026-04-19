@@ -36,13 +36,13 @@ type Player = {
 const TEAM_META: Record<1 | 2, { label: string; color: string; bg: string }> = {
   1: {
     label: "Team 1",
-    color: "#6366f1",
-    bg: "color-mix(in oklab, #6366f1 18%, transparent)",
+    color: "var(--game-pink)",
+    bg: "color-mix(in oklab, var(--game-pink) 22%, var(--game-paper))",
   },
   2: {
     label: "Team 2",
-    color: "#f43f5e",
-    bg: "color-mix(in oklab, #f43f5e 18%, transparent)",
+    color: "var(--game-cyan)",
+    bg: "color-mix(in oklab, var(--game-cyan) 22%, var(--game-paper))",
   },
 };
 
@@ -250,15 +250,15 @@ function LobbyClientInner({
   const unassignedPlayers = players.filter((p) => p.team == null);
 
   return (
-    <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-8 px-6 py-12">
-      <header className="text-center space-y-2">
-        <p className="text-sm uppercase tracking-widest text-muted-foreground">
+    <main className="game-canvas min-h-screen flex flex-col items-center gap-8 px-6 py-12">
+      <header className="text-center space-y-3">
+        <p className="text-sm uppercase tracking-widest text-[var(--game-ink)]/70">
           Room code
         </p>
-        <h1 className="text-hero text-5xl sm:text-7xl font-mono tracking-[0.25em] sm:tracking-[0.3em]">
-          {room.code}
+        <h1 className="game-hero text-5xl sm:text-7xl font-mono tracking-[0.25em] sm:tracking-[0.3em]">
+          <span className="game-hero-mark">{room.code}</span>
         </h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-[var(--game-ink)]/70 text-sm">
           Share this code or the link below to let friends in.
         </p>
       </header>
@@ -268,12 +268,18 @@ function LobbyClientInner({
       {room.mode !== "artist" && room.pack && (
         <div
           data-pack={room.pack}
-          className="inline-flex items-center gap-2 rounded-full bg-card border border-border px-4 py-1.5 shadow-sm text-sm"
+          className="sticker inline-flex items-center gap-2"
+          style={
+            {
+              ["--sticker-tilt" as string]: "-2deg",
+              background: "var(--game-cyan)",
+            } as React.CSSProperties
+          }
         >
           <span className="text-base leading-none">
             {PACK_LABELS[room.pack].emoji}
           </span>
-          <span className="text-xs uppercase tracking-widest text-muted-foreground">
+          <span className="text-[10px] uppercase tracking-widest opacity-70">
             Pack
           </span>
           <span className="font-bold">{PACK_LABELS[room.pack].title}</span>
@@ -283,7 +289,7 @@ function LobbyClientInner({
       {isHost && phase === "lobby" && (
         <div
           data-teams-controls="1"
-          className="w-full max-w-2xl flex flex-wrap items-center justify-center gap-3 rounded-2xl bg-card border border-border px-4 py-3 shadow-sm"
+          className="game-card bg-[var(--game-paper)] w-full max-w-2xl flex flex-wrap items-center justify-center gap-3 px-4 py-3"
         >
           <label className="inline-flex items-center gap-2 text-sm font-semibold cursor-pointer select-none">
             <input
@@ -296,7 +302,7 @@ function LobbyClientInner({
             />
             Teams mode
           </label>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-[var(--game-ink)]/70">
             2 teams, score = average of teammates' guess totals.
           </span>
           {teamsOn && (
@@ -316,17 +322,16 @@ function LobbyClientInner({
 
       {teamsOn ? (
         <section className="w-full max-w-3xl space-y-4">
-          <h2 className="text-lg font-heading font-black text-foreground/80 text-center">
+          <h2 className="text-lg font-heading font-black text-[var(--game-ink)]/80 text-center">
             Teams ({players.length})
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {([1, 2] as const).map((t) => (
               <div
                 key={t}
                 data-team={t}
-                className="rounded-2xl border-2 p-4 space-y-2"
+                className="game-card p-4 space-y-2"
                 style={{
-                  borderColor: TEAM_META[t].color,
                   background: TEAM_META[t].bg,
                 }}
               >
@@ -337,28 +342,57 @@ function LobbyClientInner({
                   {TEAM_META[t].label} · {teamPlayers(t).length}
                 </p>
                 {teamPlayers(t).length === 0 && (
-                  <p className="text-xs text-muted-foreground italic">
+                  <p className="text-xs text-[var(--game-ink)]/60 italic">
                     No players yet.
                   </p>
                 )}
-                <ul className="space-y-2">
-                  {teamPlayers(t).map((p) => (
+                <ul className="space-y-3">
+                  {teamPlayers(t).map((p, i) => {
+                    const isMe = p.player_id === currentPlayerId;
+                    const highlight = isMe
+                      ? "var(--game-pink)"
+                      : p.is_host
+                      ? "var(--game-canvas-yellow)"
+                      : null;
+                    return (
                     <li
                       key={p.player_id}
-                      className="rounded-xl px-3 py-2 bg-card border border-border flex items-center gap-2"
+                      className="game-card flex items-center gap-3 px-3 py-2 bg-[var(--game-paper)]"
+                      style={{
+                        transform: `rotate(${i % 2 === 0 ? -0.8 : 0.8}deg)`,
+                        outline: highlight ? `4px solid ${highlight}` : undefined,
+                        outlineOffset: highlight ? "2px" : undefined,
+                      }}
                     >
                       <span
-                        className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-black font-black text-xs"
-                        style={{ background: colorForPlayer(p.player_id) }}
+                        className="player-chip w-8 h-8 text-xs"
+                        style={
+                          {
+                            ["--chip-color" as string]: colorForPlayer(
+                              p.player_id,
+                            ),
+                          } as React.CSSProperties
+                        }
                       >
-                        {p.display_name[0]?.toUpperCase()}
+                        {p.display_name.slice(0, 2).toUpperCase()}
                       </span>
-                      <span className="font-semibold truncate flex-1">
+                      <span
+                        className="font-heading font-bold flex-1 truncate min-w-0"
+                        title={p.display_name}
+                      >
                         {p.display_name}
                       </span>
                       {p.is_host && (
-                        <span className="text-[10px] bg-muted text-muted-foreground rounded-full px-2 py-0.5">
-                          host
+                        <span
+                          className="sticker text-[11px] font-black uppercase tracking-wider"
+                          style={
+                            {
+                              ["--sticker-tilt" as string]: "3deg",
+                              background: "var(--game-canvas-yellow)",
+                            } as React.CSSProperties
+                          }
+                        >
+                          👑 host
                         </span>
                       )}
                       {isHost && (
@@ -368,7 +402,8 @@ function LobbyClientInner({
                           onClick={() =>
                             handleSwapTeam(p.player_id, p.team ?? null)
                           }
-                          className="text-[10px] font-bold rounded-full px-2 py-0.5 border border-border hover:bg-muted"
+                          aria-label="Swap team"
+                          className="game-card w-7 h-7 flex items-center justify-center rounded-full text-xs bg-[var(--game-cyan)]"
                         >
                           ⇄
                         </button>
@@ -381,28 +416,42 @@ function LobbyClientInner({
                         />
                       )}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
             ))}
           </div>
           {unassignedPlayers.length > 0 && (
-            <div className="rounded-2xl border border-dashed border-border p-4 space-y-2">
-              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+            <div className="game-card p-4 space-y-2 bg-[var(--game-paper)]">
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--game-ink)]/70">
                 Unassigned · {unassignedPlayers.length}
               </p>
               <ul className="flex flex-wrap gap-2">
-                {unassignedPlayers.map((p) => (
+                {unassignedPlayers.map((p, i) => (
                   <li
                     key={p.player_id}
-                    className="rounded-full bg-muted px-3 py-1 text-sm flex items-center gap-2"
+                    className="sticker flex items-center gap-2"
+                    style={
+                      {
+                        ["--sticker-tilt" as string]: `${
+                          i % 2 === 0 ? -2 : 2
+                        }deg`,
+                      } as React.CSSProperties
+                    }
                   >
                     <span className="font-semibold">{p.display_name}</span>
                     {isHost && (
                       <button
                         type="button"
                         onClick={() => handleSwapTeam(p.player_id, null)}
-                        className="text-[10px] font-bold rounded-full px-2 py-0.5 border border-border hover:bg-card"
+                        className="sticker text-[10px]"
+                        style={
+                          {
+                            ["--sticker-tilt" as string]: "0deg",
+                            background: "var(--game-canvas-yellow)",
+                          } as React.CSSProperties
+                        }
                       >
                         Assign
                       </button>
@@ -415,25 +464,54 @@ function LobbyClientInner({
         </section>
       ) : (
         <section className="w-full max-w-2xl space-y-3">
-          <h2 className="text-lg font-heading font-black text-foreground/80">
+          <h2 className="text-lg font-heading font-black text-[var(--game-ink)]/80">
             Players ({players.length})
           </h2>
-          <ul className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {players.map((p) => (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {players.map((p, i) => {
+              const isMe = p.player_id === currentPlayerId;
+              const highlight = isMe
+                ? "var(--game-pink)"
+                : p.is_host
+                ? "var(--game-canvas-yellow)"
+                : null;
+              return (
               <li
                 key={p.player_id}
-                className="rounded-2xl px-4 py-3 bg-card border border-border flex items-center gap-3 shadow-sm"
+                className="game-card flex items-center gap-3 px-4 py-3 bg-[var(--game-paper)]"
+                style={{
+                  transform: `rotate(${i % 2 === 0 ? -0.8 : 0.8}deg)`,
+                  outline: highlight ? `4px solid ${highlight}` : undefined,
+                  outlineOffset: highlight ? "2px" : undefined,
+                }}
               >
                 <span
-                  className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-black font-black"
-                  style={{ background: colorForPlayer(p.player_id) }}
+                  className="player-chip w-10 h-10 text-sm shrink-0"
+                  style={
+                    {
+                      ["--chip-color" as string]: colorForPlayer(p.player_id),
+                    } as React.CSSProperties
+                  }
                 >
-                  {p.display_name[0]?.toUpperCase()}
+                  {p.display_name.slice(0, 2).toUpperCase()}
                 </span>
-                <span className="font-semibold truncate">{p.display_name}</span>
+                <span
+                  className="font-heading font-bold flex-1 truncate min-w-0"
+                  title={p.display_name}
+                >
+                  {p.display_name}
+                </span>
                 {p.is_host && (
-                  <span className="ml-auto text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5">
-                    host
+                  <span
+                    className="sticker text-[11px] font-black uppercase tracking-wider shrink-0"
+                    style={
+                      {
+                        ["--sticker-tilt" as string]: "3deg",
+                        background: "var(--game-canvas-yellow)",
+                      } as React.CSSProperties
+                    }
+                  >
+                    👑 host
                   </span>
                 )}
                 {isHost && p.player_id !== currentPlayerId && (
@@ -444,13 +522,14 @@ function LobbyClientInner({
                   />
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       )}
 
       {phase === "lobby" && (
-        <div className="flex gap-3 flex-wrap justify-center">
+        <div className="flex gap-3 flex-wrap justify-center w-full max-w-md">
           {isHost && (() => {
             const teamsIncomplete =
               teamsOn &&
@@ -458,18 +537,24 @@ function LobbyClientInner({
                 teamPlayers(2).length === 0 ||
                 unassignedPlayers.length > 0);
             const disabled = players.length < 2 || starting || teamsIncomplete;
-            const label = starting
-              ? "Starting…"
+            const ariaLabel = starting
+              ? "Starting"
               : teamsIncomplete
                 ? "Assign every player to a team"
                 : `Start game (${players.length}/2+)`;
+            const visibleLabel = starting
+              ? "Starting…"
+              : teamsIncomplete
+                ? "Assign every player to a team"
+                : `Start →`;
             return (
               <Button
                 onClick={handleStart}
                 disabled={disabled}
-                className="font-bold text-lg px-8 py-6 rounded-2xl"
+                aria-label={ariaLabel}
+                className="flex-1 h-12 font-bold text-lg"
               >
-                {label}
+                {visibleLabel}
               </Button>
             );
           })()}
@@ -480,8 +565,8 @@ function LobbyClientInner({
               })
             }
             disabled={isPending}
-            variant="outline"
-            className="rounded-2xl px-6"
+            variant="destructive"
+            className="h-12 px-6"
           >
             Leave
           </Button>
@@ -489,7 +574,7 @@ function LobbyClientInner({
       )}
 
       {phase !== "lobby" && (
-        <div className="text-center text-2xl font-heading font-black opacity-90">
+        <div className="text-center text-2xl font-heading font-black text-[var(--game-ink)]">
           Game in progress — phase: {phase}
         </div>
       )}

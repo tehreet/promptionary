@@ -66,7 +66,7 @@ export function PasskeySignInButton({
         disabled={busy}
         variant="outline"
         data-provider="passkey"
-        className="w-full h-11 rounded-xl font-semibold"
+        className="w-full h-12"
       >
         <span className="mr-1.5" aria-hidden>
           🔑
@@ -74,7 +74,7 @@ export function PasskeySignInButton({
         {busy ? "Waiting for passkey…" : "Continue with a passkey"}
       </Button>
       {error && (
-        <div className="text-xs bg-red-500/20 border border-red-500/30 rounded-lg px-3 py-2">
+        <div className="text-xs bg-destructive/20 border border-destructive rounded-lg px-3 py-2">
           {error}
         </div>
       )}
@@ -225,7 +225,7 @@ export function PasskeyContinueButton({ onDone }: { onDone?: () => void }) {
           disabled={busy || displayName.trim().length === 0}
           data-provider="passkey"
           data-action="register-and-signin"
-          className="w-full h-11 rounded-xl font-semibold"
+          className="w-full h-12"
         >
           <span className="mr-1.5" aria-hidden>
             🔑
@@ -244,7 +244,7 @@ export function PasskeyContinueButton({ onDone }: { onDone?: () => void }) {
           ← Try signing in instead
         </button>
         {error && (
-          <div className="text-xs bg-red-500/20 border border-red-500/30 rounded-lg px-3 py-2">
+          <div className="text-xs bg-destructive/20 border border-destructive rounded-lg px-3 py-2">
             {error}
           </div>
         )}
@@ -257,17 +257,16 @@ export function PasskeyContinueButton({ onDone }: { onDone?: () => void }) {
       <Button
         onClick={trySignIn}
         disabled={busy}
-        variant="outline"
         data-provider="passkey"
-        className="w-full h-11 rounded-xl font-semibold"
+        className="w-full h-12"
       >
         <span className="mr-1.5" aria-hidden>
           🔑
         </span>
-        {busy ? "Waiting for passkey…" : "Continue with a passkey"}
+        {busy ? "Waiting for passkey…" : "Use a passkey"}
       </Button>
       {error && (
-        <div className="text-xs bg-red-500/20 border border-red-500/30 rounded-lg px-3 py-2">
+        <div className="text-xs bg-destructive/20 border border-destructive rounded-lg px-3 py-2">
           {error}
         </div>
       )}
@@ -331,7 +330,7 @@ export function PasskeyRegisterButton({
         onClick={go}
         disabled={busy}
         data-action="register-passkey"
-        className="w-full h-11 rounded-xl font-semibold"
+        className="w-full h-12"
       >
         <span className="mr-1.5" aria-hidden>
           🔑
@@ -339,7 +338,7 @@ export function PasskeyRegisterButton({
         {busy ? "Waiting for your device…" : "Add a passkey"}
       </Button>
       {error && (
-        <div className="text-xs bg-red-500/20 border border-red-500/30 rounded-lg px-3 py-2">
+        <div className="text-xs bg-destructive/20 border border-destructive rounded-lg px-3 py-2">
           {error}
         </div>
       )}

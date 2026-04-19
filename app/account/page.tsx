@@ -20,13 +20,13 @@ export default async function AccountPage() {
   const profile = await getCurrentProfile(supabase);
 
   return (
-    <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-6 px-6 py-12">
+    <main className="game-canvas min-h-screen flex flex-col items-center gap-6 px-6 py-12">
       <header className="text-center space-y-2 max-w-xl">
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
           Account
         </p>
-        <h1 className="text-hero text-4xl sm:text-5xl">
-          {profile?.display_name ?? "You"}
+        <h1 className="game-hero text-4xl sm:text-5xl">
+          <span className="game-hero-mark">{profile?.display_name ?? "You"}</span>
         </h1>
         <p className="text-sm text-muted-foreground">{user.email}</p>
         {profile?.handle && (

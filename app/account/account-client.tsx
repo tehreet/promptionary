@@ -92,7 +92,7 @@ export function AccountClient() {
                   type="button"
                   onClick={() => remove(k.id)}
                   disabled={busyId === k.id}
-                  className="text-xs rounded-full border border-border bg-muted hover:bg-destructive hover:text-white px-3 py-1 font-semibold transition disabled:opacity-50"
+                  className="text-xs rounded-full border border-border bg-muted hover:bg-destructive hover:text-[var(--game-cream)] px-3 py-1 font-semibold transition disabled:opacity-50"
                 >
                   {busyId === k.id ? "Removing…" : "Remove"}
                 </button>

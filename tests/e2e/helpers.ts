@@ -3,13 +3,26 @@ import { expect, type Page } from "@playwright/test";
 export async function createRoomAs(
   page: Page,
   name: string,
-  opts: { maxRounds?: number; guessSeconds?: number; revealSeconds?: number } = {},
+  opts: {
+    maxRounds?: number;
+    guessSeconds?: number;
+    revealSeconds?: number;
+    mode?: "party" | "artist";
+  } = {},
 ) {
   await page.goto("/");
   const nameInput = page.getByLabel("Your name").first();
   await nameInput.click();
   await nameInput.press("ControlOrMeta+a");
   await nameInput.fill(name);
+
+  // Sitewide redesign defaulted the create card to Artist. Tests that don't
+  // specify a mode historically assumed Party; keep them that way. ModeButton
+  // is a plain <button> whose accessible name is "<title> <subtitle>".
+  const mode = opts.mode ?? "party";
+  const modeLabel =
+    mode === "artist" ? /Artist\s+One writes/ : /Party\s+AI writes/;
+  await page.getByRole("button", { name: modeLabel }).click();
 
   if (opts.maxRounds !== undefined || opts.guessSeconds !== undefined || opts.revealSeconds !== undefined) {
     await page.getByRole("button", { name: /Customize rounds/ }).click();

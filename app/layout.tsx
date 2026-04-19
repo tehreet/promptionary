@@ -48,9 +48,12 @@ export const metadata: Metadata = {
 // Discord uses the first `theme-color` meta for the embed's left bar;
 // Safari/iOS uses it for the address bar tint.
 export const viewport: Viewport = {
+  // Light → cream canvas, Dark → deep-navy canvas. Home page overrides
+  // to yellow via its own .game-canvas-page class; Discord/Safari only
+  // read the first media-match so these are the addressbar/embed tints.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f43f5e" },
-    { media: "(prefers-color-scheme: dark)", color: "#6366f1" },
+    { media: "(prefers-color-scheme: light)", color: "#fff7d6" },
+    { media: "(prefers-color-scheme: dark)", color: "#14112e" },
   ],
 };
 

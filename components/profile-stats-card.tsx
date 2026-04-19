@@ -8,6 +8,15 @@ type Stats = {
   daily_longest_streak: number;
 };
 
+const DOT_COLORS = [
+  "var(--game-pink)",
+  "var(--game-cyan)",
+  "var(--game-orange)",
+  "var(--game-canvas-yellow)",
+  "var(--game-pink)",
+  "var(--game-cyan)",
+];
+
 export function ProfileStatsCard({
   stats,
   className = "",
@@ -60,29 +69,35 @@ export function ProfileStatsCard({
   return (
     <div
       data-profile-stats="1"
-      className={`w-full max-w-xl rounded-3xl bg-card border border-border shadow-lg p-6 space-y-4 ${className}`}
+      className={`game-card bg-[var(--game-paper)] w-full max-w-xl p-6 ${className}`}
     >
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        Lifetime stats
-      </p>
-      <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {cells.map((c) => (
-          <li
-            key={c.label}
-            className="rounded-2xl bg-muted/50 border border-border px-3 py-3 flex flex-col gap-0.5"
-          >
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {c.label}
-            </span>
-            <span className="font-heading font-black text-2xl font-mono">
-              {c.value}
-            </span>
-            {c.sub && (
-              <span className="text-[11px] text-muted-foreground">{c.sub}</span>
+      <h2 className="game-hero text-xl mb-4">Your stats</h2>
+      <div
+        className="rounded-xl p-5 grid grid-cols-2 sm:grid-cols-3 gap-4"
+        style={{
+          background: "var(--game-canvas-dark)",
+          color: "var(--game-cream)",
+        }}
+      >
+        {cells.map((cell, i) => (
+          <div key={cell.label} className="text-center flex flex-col items-center gap-0.5">
+            <span
+              className="inline-block w-2 h-2 rounded-full mb-1"
+              style={{ background: DOT_COLORS[i % DOT_COLORS.length] }}
+              aria-hidden
+            />
+            <p className="font-heading font-black font-mono text-2xl leading-none">
+              {cell.value}
+            </p>
+            <p className="text-[10px] uppercase tracking-wider opacity-80">
+              {cell.label}
+            </p>
+            {cell.sub && (
+              <p className="text-[10px] opacity-70">{cell.sub}</p>
             )}
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

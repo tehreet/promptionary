@@ -16,17 +16,14 @@ export default function OpenGraph() {
           alignItems: "stretch",
           justifyContent: "flex-start",
           fontFamily: "sans-serif",
-          color: "white",
-          backgroundColor: "#0b0820",
-          backgroundImage: `
-            radial-gradient(ellipse 70% 60% at 10% -10%, rgba(99, 102, 241, 0.95), transparent 55%),
-            radial-gradient(ellipse 60% 55% at 95% 10%, rgba(217, 70, 239, 0.9), transparent 55%),
-            radial-gradient(ellipse 80% 55% at 60% 110%, rgba(244, 63, 94, 0.85), transparent 55%),
-            linear-gradient(135deg, #0b0820 0%, #1a0b3d 100%)
-          `,
+          // Hex mirrors --game-canvas-yellow, --game-ink, --game-pink,
+          // --game-cyan. ImageResponse cannot resolve CSS vars — if the
+          // tokens in app/globals.css change, update here too.
+          color: "#1e1b4d",
+          backgroundColor: "#ffe15e",
         }}
       >
-        {/* Decorative color blobs on the right */}
+        {/* Decorative sticker blobs — flat fills, ink borders. */}
         <div
           style={{
             position: "absolute",
@@ -35,8 +32,8 @@ export default function OpenGraph() {
             width: 420,
             height: 420,
             borderRadius: 210,
-            background: "rgba(99, 102, 241, 0.55)",
-            filter: "blur(8px)",
+            background: "#ff5eb4",
+            border: "6px solid #1e1b4d",
           }}
         />
         <div
@@ -47,8 +44,8 @@ export default function OpenGraph() {
             width: 320,
             height: 320,
             borderRadius: 160,
-            background: "rgba(217, 70, 239, 0.55)",
-            filter: "blur(8px)",
+            background: "#3ddce0",
+            border: "6px solid #1e1b4d",
           }}
         />
         <div
@@ -59,8 +56,8 @@ export default function OpenGraph() {
             width: 280,
             height: 280,
             borderRadius: 140,
-            background: "rgba(244, 63, 94, 0.55)",
-            filter: "blur(8px)",
+            background: "#ff8b3d",
+            border: "6px solid #1e1b4d",
           }}
         />
 
@@ -96,8 +93,9 @@ export default function OpenGraph() {
                 alignItems: "center",
                 justifyContent: "center",
                 borderRadius: 12,
-                backgroundImage:
-                  "linear-gradient(135deg, #6366f1, #d946ef, #f43f5e)",
+                background: "#ff5eb4",
+                border: "3px solid #1e1b4d",
+                color: "#fff7d6",
                 fontSize: 30,
                 fontWeight: 900,
                 letterSpacing: "-0.05em",
@@ -159,8 +157,9 @@ export default function OpenGraph() {
                   display: "flex",
                   padding: "10px 22px",
                   borderRadius: 9999,
-                  background: "rgba(255,255,255,0.14)",
-                  border: "1px solid rgba(255,255,255,0.28)",
+                  background: "#fff7d6",
+                  border: "3px solid #1e1b4d",
+                  color: "#1e1b4d",
                   fontSize: 26,
                   fontWeight: 700,
                 }}

@@ -24,7 +24,7 @@ export function InviteCard({ code }: { code: string }) {
   }
 
   return (
-    <div className="w-full max-w-md rounded-2xl bg-card border border-border p-4 flex flex-col gap-3 shadow-sm">
+    <div className="w-full max-w-md rounded-2xl bg-card text-card-foreground border border-border p-4 flex flex-col gap-3 shadow-sm">
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted-foreground">

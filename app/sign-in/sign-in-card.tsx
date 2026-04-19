@@ -78,7 +78,7 @@ export function SignInCard({
 
   if (sent) {
     return (
-      <div className="w-full max-w-sm rounded-3xl bg-card border border-border shadow-xl p-6 text-center space-y-2">
+      <div className="game-card bg-[var(--game-paper)] w-full max-w-sm p-6 text-center space-y-2">
         <p className="text-2xl font-heading font-black">Check your inbox</p>
         <p className="text-sm text-muted-foreground">
           We sent a sign-in link to <span className="font-semibold">{email}</span>.
@@ -89,14 +89,13 @@ export function SignInCard({
   }
 
   return (
-    <div className="w-full max-w-sm rounded-3xl bg-card/90 backdrop-blur border border-border shadow-xl p-6 space-y-5">
+    <div className="game-card bg-[var(--game-paper)] w-full max-w-sm p-6 space-y-5">
       <div className="space-y-2">
-        <PasskeyContinueButton />
         <Button
           onClick={() => oauth("google")}
           disabled={busy !== null}
-          className="w-full h-11 rounded-xl font-semibold"
           variant="outline"
+          className="w-full h-12"
           data-provider="google"
         >
           {busy === "google" ? "Redirecting…" : "Continue with Google"}
@@ -104,12 +103,16 @@ export function SignInCard({
         <Button
           onClick={() => oauth("discord")}
           disabled={busy !== null}
-          className="w-full h-11 rounded-xl font-semibold text-white"
-          style={{ background: "#5865F2", borderColor: "#5865F2" }}
+          className="w-full h-12"
+          style={{
+            background: "var(--game-cyan)",
+            color: "var(--game-ink)",
+          }}
           data-provider="discord"
         >
           {busy === "discord" ? "Redirecting…" : "Continue with Discord"}
         </Button>
+        <PasskeyContinueButton />
       </div>
 
       <div className="flex items-center gap-3">
@@ -137,14 +140,18 @@ export function SignInCard({
         <Button
           type="submit"
           disabled={busy !== null || !email.trim()}
-          className="w-full h-11 rounded-xl font-bold"
+          className="w-full h-12"
+          style={{
+            background: "var(--game-orange)",
+            color: "var(--game-ink)",
+          }}
         >
-          {busy === "email" ? "Sending link…" : "Email me a sign-in link"}
+          {busy === "email" ? "Sending link…" : "Send magic link"}
         </Button>
       </form>
 
       {error && (
-        <div className="text-sm bg-red-500/20 border border-red-500/30 rounded-xl p-3">
+        <div className="text-sm bg-destructive/20 border border-destructive rounded-xl p-3">
           {error}
         </div>
       )}

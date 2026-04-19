@@ -163,12 +163,17 @@ function RemoteCursor({ cursor }: { cursor: Cursor }) {
       >
         <path d="M2 2 L2 16 L6 12 L9 19 L12 17.5 L9 11 L14 11 Z" />
       </svg>
-      <div
-        className="px-2 py-0.5 rounded-md text-xs font-bold text-black whitespace-nowrap shadow"
-        style={{ background: cursor.color, marginTop: -2 }}
+      <span
+        className="sticker text-xs"
+        style={
+          {
+            ["--sticker-tilt" as string]: "0deg",
+            marginTop: -2,
+          } as React.CSSProperties
+        }
       >
         {cursor.name}
-      </div>
+      </span>
     </div>
   );
 }

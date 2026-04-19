@@ -13,13 +13,15 @@ export default function AppleIcon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "white",
+          // Hex mirrors the game-canvas yellow + pink sticker palette;
+          // ImageResponse can't read CSS vars.
+          color: "#1e1b4d",
           fontSize: 128,
           fontWeight: 900,
           letterSpacing: "-0.05em",
           fontFamily: "sans-serif",
           backgroundImage:
-            "linear-gradient(135deg, #6366f1 0%, #d946ef 55%, #f43f5e 100%)",
+            "linear-gradient(135deg, #ffe15e 0%, #ff5eb4 100%)",
         }}
       >
         P
