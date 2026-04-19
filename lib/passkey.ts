@@ -39,3 +39,15 @@ export function getExpectedOrigins(req: Request): string[] {
 export const REGISTER_CHALLENGE_COOKIE = "ppk_reg_challenge";
 export const SIGNIN_CHALLENGE_COOKIE = "ppk_signin_challenge";
 export const CHALLENGE_TTL_SECONDS = 120;
+
+export function bytesToBase64url(buf: Uint8Array | Buffer): string {
+  const b64 = Buffer.from(buf).toString("base64");
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function base64urlToBytes(s: string): Buffer {
+  // base64url → base64 with padding, then standard decode.
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = b64.length % 4 ? "=".repeat(4 - (b64.length % 4)) : "";
+  return Buffer.from(b64 + pad, "base64");
+}

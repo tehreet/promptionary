@@ -19,13 +19,12 @@ export async function POST(req: Request) {
   const {
     data: { user },
   } = await userClient.auth.getUser();
-  if (!user || user.is_anonymous) {
-    return NextResponse.json(
-      { error: "sign in with email or oauth first to add a passkey" },
-      { status: 401 },
-    );
+  if (!user) {
+    return NextResponse.json({ error: "no session" }, { status: 401 });
   }
 
+  // Anon users can register — /api/auth/passkey/register/verify promotes
+  // them in place using the display name they supply there.
   const svc = createSupabaseServiceClient();
   const { data: existing } = await svc
     .from("passkeys")
@@ -48,11 +47,15 @@ export async function POST(req: Request) {
     timeout: CHALLENGE_TTL_SECONDS * 1000,
     attestationType: "none",
     excludeCredentials: (existing ?? []).map((c) => ({
-      id: bytesToBase64url(c.credential_id as unknown as Buffer),
+      id: c.credential_id,
       transports: (c.transports ?? []) as AuthenticatorTransport[],
     })),
     authenticatorSelection: {
-      residentKey: "preferred",
+      // Required so usernameless sign-in can surface this credential
+      // later — without a discoverable credential, /signin/options with
+      // no allowCredentials won't find it on another device / after a
+      // cookie wipe.
+      residentKey: "required",
       userVerification: "preferred",
     },
   });
@@ -67,9 +70,4 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json(options);
-}
-
-function bytesToBase64url(buf: Buffer | Uint8Array): string {
-  const b64 = Buffer.from(buf).toString("base64");
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

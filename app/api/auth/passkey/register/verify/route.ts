@@ -8,6 +8,7 @@ import {
 } from "@/lib/supabase/server";
 import {
   REGISTER_CHALLENGE_COOKIE,
+  bytesToBase64url,
   getExpectedOrigins,
   getRpIdFromRequest,
 } from "@/lib/passkey";
@@ -19,14 +20,28 @@ export async function POST(req: Request) {
   const {
     data: { user },
   } = await userClient.auth.getUser();
-  if (!user || user.is_anonymous) {
+  if (!user) {
     return NextResponse.json({ error: "unauthed" }, { status: 401 });
   }
 
   const body = (await req.json()) as {
     response: RegistrationResponseJSON;
     label?: string;
+    displayName?: string;
   };
+
+  // Anon users must supply a display name — we promote them in place so
+  // the magic-link session-mint path works on future sign-ins, and the
+  // handle_user_promoted trigger needs something to put in profiles.
+  const displayName = body.displayName?.trim() ?? "";
+  if (user.is_anonymous) {
+    if (displayName.length < 1 || displayName.length > 24) {
+      return NextResponse.json(
+        { error: "display name must be 1–24 characters" },
+        { status: 400 },
+      );
+    }
+  }
 
   const jar = await cookies();
   const expectedChallenge = jar.get(REGISTER_CHALLENGE_COOKIE)?.value;
@@ -56,10 +71,29 @@ export async function POST(req: Request) {
   }
 
   const info = verification.registrationInfo;
-  const credentialId = Buffer.from(info.credential.id, "base64url");
-  const publicKey = Buffer.from(info.credential.publicKey);
+  // SimpleWebAuthn already returns credential.id as base64url. publicKey
+  // arrives as Uint8Array — encode to base64url for TEXT storage.
+  const credentialId = info.credential.id;
+  const publicKey = bytesToBase64url(info.credential.publicKey);
 
   const svc = createSupabaseServiceClient();
+
+  // Promote first — if this fails we don't want an orphan passkey row.
+  if (user.is_anonymous) {
+    const syntheticEmail = `${user.id}@passkey.promptionary.io`;
+    const { error: promoteErr } = await svc.rpc("promote_anon_for_passkey", {
+      p_user_id: user.id,
+      p_email: syntheticEmail,
+      p_display_name: displayName,
+    });
+    if (promoteErr) {
+      return NextResponse.json(
+        { error: `could not promote: ${promoteErr.message}` },
+        { status: 500 },
+      );
+    }
+  }
+
   const { error } = await svc.from("passkeys").insert({
     user_id: user.id,
     credential_id: credentialId,

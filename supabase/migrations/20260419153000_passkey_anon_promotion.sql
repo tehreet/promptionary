@@ -37,5 +37,6 @@ begin
   end if;
 end;
 $$;
+
 revoke all on function promote_anon_for_passkey(uuid, text, text) from public;
 -- No grant to anon / authenticated — service role only.
