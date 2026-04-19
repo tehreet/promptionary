@@ -185,6 +185,48 @@ export type Database = {
           },
         ]
       }
+      passkeys: {
+        Row: {
+          backed_up: boolean
+          counter: number
+          created_at: string
+          credential_id: string
+          device_type: string | null
+          id: string
+          label: string | null
+          last_used_at: string | null
+          public_key: string
+          transports: string[]
+          user_id: string
+        }
+        Insert: {
+          backed_up?: boolean
+          counter?: number
+          created_at?: string
+          credential_id: string
+          device_type?: string | null
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          public_key: string
+          transports?: string[]
+          user_id: string
+        }
+        Update: {
+          backed_up?: boolean
+          counter?: number
+          created_at?: string
+          credential_id?: string
+          device_type?: string | null
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          public_key?: string
+          transports?: string[]
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -485,6 +527,7 @@ export type Database = {
         Returns: undefined
       }
       leave_room: { Args: { p_room_id: string }; Returns: undefined }
+      passkey_count_for_user: { Args: { p_user_id: string }; Returns: number }
       play_again: {
         Args: {
           p_guess_seconds?: number

@@ -131,6 +131,14 @@ export function UserMenu({ className = "" }: { className?: string }) {
               {profile?.display_name}
             </div>
           </div>
+          <Link
+            href="/account"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block rounded-lg px-3 py-2 text-sm hover:bg-muted transition"
+          >
+            Account + passkeys
+          </Link>
           <form action={signOutAction}>
             <button
               type="submit"

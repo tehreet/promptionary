@@ -5,6 +5,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasskeySignInButton } from "@/components/passkey-buttons";
 
 export function SignInCard({
   nextPath,
@@ -90,6 +91,7 @@ export function SignInCard({
   return (
     <div className="w-full max-w-sm rounded-3xl bg-card/90 backdrop-blur border border-border shadow-xl p-6 space-y-5">
       <div className="space-y-2">
+        <PasskeySignInButton />
         <Button
           onClick={() => oauth("google")}
           disabled={busy !== null}
