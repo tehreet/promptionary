@@ -1,7 +1,7 @@
-import { test, expect } from "@playwright/test";
-import { createRoomAs, joinRoomAs, submitGuess } from "./helpers";
+import { test, expect, type Page } from "@playwright/test";
+import { joinRoomAs, submitGuess } from "./helpers";
 
-test("artist mode: host writes the prompt, others guess it", async ({
+test("artist mode: one player writes the prompt, the other guesses", async ({
   browser,
 }) => {
   test.setTimeout(180_000);
@@ -9,7 +9,6 @@ test("artist mode: host writes the prompt, others guess it", async ({
   const hostCtx = await browser.newContext();
   const host = await hostCtx.newPage();
 
-  // Create artist-mode room with short reveal
   await host.goto("/");
   const hostName = `Host${Date.now()}`;
   const nameInput = host.getByLabel("Your name").first();
@@ -30,54 +29,60 @@ test("artist mode: host writes the prompt, others guess it", async ({
   await host.waitForURL(/\/play\/[A-Z]{4}$/, { timeout: 30_000 });
   const code = host.url().match(/\/play\/([A-Z]{4})$/)![1];
 
-  // Joiner joins (becomes the guesser, since host joined first = first artist)
   const joinerCtx = await browser.newContext();
   const joiner = await joinerCtx.newPage();
-  await joinRoomAs(joiner, code, `Joiner${Date.now()}`);
+  const joinerName = `Joiner${Date.now()}`;
+  await joinRoomAs(joiner, code, joinerName);
 
-  await expect(host.getByText(/Joiner/)).toBeVisible({ timeout: 10_000 });
+  await expect(host.getByText(joinerName)).toBeVisible({ timeout: 10_000 });
   await host.getByRole("button", { name: /Start game/ }).click();
 
-  // Host is the artist for round 1 — sees the prompting textarea
-  await expect(host.getByText(/You.+re the artist/)).toBeVisible({
-    timeout: 15_000,
-  });
-  const promptArea = host.getByRole("textbox");
+  // Artist rotation is randomized now — either host or joiner may be picked
+  // as the first artist. Wait for "You're the artist" to appear on either
+  // page and key the rest of the test on that.
+  const [artist, guesser, artistName] = await Promise.race<
+    [Page, Page, string]
+  >([
+    host
+      .getByText(/You.+re the artist/)
+      .waitFor({ timeout: 20_000 })
+      .then(() => [host, joiner, hostName] as [Page, Page, string]),
+    joiner
+      .getByText(/You.+re the artist/)
+      .waitFor({ timeout: 20_000 })
+      .then(() => [joiner, host, joinerName] as [Page, Page, string]),
+  ]);
+
+  const promptArea = artist.getByRole("textbox");
   await promptArea.fill(
     "a corgi in a purple beret painting a sunset in oil pastel",
   );
-  await host.getByRole("button", { name: /Send to the AI/ }).click();
+  await artist.getByRole("button", { name: /Send to the AI/ }).click();
 
-  // Joiner sees the guessing UI; host sees "You wrote this one"
   await expect(
-    joiner.getByRole("textbox", { name: /What's the prompt/ }),
+    guesser.getByRole("textbox", { name: /What's the prompt/ }),
   ).toBeVisible({ timeout: 90_000 });
-  await expect(host.getByText(/You wrote this one/)).toBeVisible();
-  await expect(host.getByText(/Prompt by/)).toBeVisible();
+  await expect(artist.getByText(/You wrote this one/)).toBeVisible();
+  await expect(guesser.getByText(/Prompt by/)).toBeVisible();
 
-  // Submission total is 1 (only joiner can guess; host is the artist)
-  await expect(joiner.getByText(/Submissions: 0\/1/)).toBeVisible();
+  await expect(guesser.getByText(/Submissions: 0\/1/)).toBeVisible();
 
-  // Joiner guesses
-  await submitGuess(joiner, "a dog wearing a hat painting at sunset");
+  await submitGuess(guesser, "a dog wearing a hat painting at sunset");
 
-  // Reveal shows the true prompt
-  for (const page of [host, joiner]) {
+  for (const page of [artist, guesser]) {
     await expect(page.getByText("The prompt was")).toBeVisible({
       timeout: 30_000,
     });
   }
 
-  // Final leaderboard shows (max_rounds was 1)
-  for (const page of [host, joiner]) {
+  for (const page of [artist, guesser]) {
     await expect(page.getByText("Final leaderboard")).toBeVisible({
       timeout: 30_000,
     });
   }
 
-  // Host (artist) should have scored something (avg of guesser's score)
-  const hostScoreVisible = await host.getByText(hostName).isVisible();
-  expect(hostScoreVisible).toBe(true);
+  // Artist gets credit for the average guesser score.
+  await expect(artist.getByText(artistName)).toBeVisible();
 
   await hostCtx.close();
   await joinerCtx.close();

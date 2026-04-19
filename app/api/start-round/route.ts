@@ -60,10 +60,15 @@ export async function POST(req: Request) {
   let pngBuffer: Buffer;
   try {
     if (round.prompt && round.prompt.length > 0) {
-      // Artist-mode round: the artist already wrote the prompt. Tag it with
-      // Gemini so scoring can weight words by role, then skip authoring.
+      // Artist-mode round: the artist already wrote the prompt. Tag it and
+      // generate the image in parallel — neither depends on the other.
       prompt = round.prompt;
-      ({ tokens } = await tagPromptRoles(prompt));
+      const [tagRes, img] = await Promise.all([
+        tagPromptRoles(prompt),
+        generateImagePng(prompt),
+      ]);
+      tokens = tagRes.tokens;
+      pngBuffer = img;
     } else {
       // Collect up to 5 most recent prompts so the author avoids repeats.
       const { data: recentRounds } = await svc
@@ -81,8 +86,8 @@ export async function POST(req: Request) {
         previousPrompts,
         room.pack ?? "mixed",
       ));
+      pngBuffer = await generateImagePng(prompt);
     }
-    pngBuffer = await generateImagePng(prompt);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[start-round] gemini failed", message);
@@ -115,14 +120,27 @@ export async function POST(req: Request) {
     .from("round-images")
     .getPublicUrl(storagePath);
 
-  await svc
-    .from("rounds")
-    .update({
-      prompt,
-      image_url: publicUrl.publicUrl,
-      image_storage_path: storagePath,
-    })
-    .eq("id", round.id);
+  // Persist the image + prompt and flip the room to 'guessing' in parallel
+  // — both writes are independent of the token insert, which only matters
+  // later at reveal/scoring. The sooner we flip the phase, the sooner every
+  // client renders the image instead of staring at the spinner.
+  const phaseEndsAt = new Date(
+    Date.now() + room.guess_seconds * 1000,
+  ).toISOString();
+  await Promise.all([
+    svc
+      .from("rounds")
+      .update({
+        prompt,
+        image_url: publicUrl.publicUrl,
+        image_storage_path: storagePath,
+      })
+      .eq("id", round.id),
+    svc
+      .from("rooms")
+      .update({ phase: "guessing", phase_ends_at: phaseEndsAt })
+      .eq("id", round.room_id),
+  ]);
 
   if (tokens.length > 0) {
     await svc.from("round_prompt_tokens").insert(
@@ -134,14 +152,6 @@ export async function POST(req: Request) {
       })),
     );
   }
-
-  const phaseEndsAt = new Date(
-    Date.now() + room.guess_seconds * 1000,
-  ).toISOString();
-  await svc
-    .from("rooms")
-    .update({ phase: "guessing", phase_ends_at: phaseEndsAt })
-    .eq("id", round.room_id);
 
   return NextResponse.json({ ok: true, image_url: publicUrl.publicUrl });
 }

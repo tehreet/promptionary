@@ -20,6 +20,7 @@ import {
 } from "@/lib/sfx";
 import { PromptFlipboard, type PromptToken } from "@/components/prompt-flipboard";
 import { HostControls } from "@/components/host-controls";
+import { LoadingPhrases } from "@/components/loading-phrases";
 
 type Room = {
   id: string;
@@ -656,9 +657,7 @@ function GameClientInner({
             <>
               <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
               <p className="text-xl font-bold">The AI is painting…</p>
-              <p className="opacity-70 text-sm">
-                {isHost ? "Thanks for hosting — this takes ~10 seconds" : "Hold tight"}
-              </p>
+              <LoadingPhrases seed={currentRound?.id ?? `r-${room.round_num}`} />
             </>
           )}
         </div>

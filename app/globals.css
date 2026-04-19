@@ -247,6 +247,18 @@
     }
   }
 
+  /* Fade-in for loading phrases so each swap feels intentional. */
+  @keyframes phrase-fade-in {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 0.9; transform: translateY(0); }
+  }
+  .loading-phrase {
+    animation: phrase-fade-in 0.35s ease-out both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .loading-phrase { animation: none; }
+  }
+
   /* Nailed-it callout on the top guess row. */
   @keyframes nailed-pop {
     0% { transform: scale(0.2) rotate(-8deg); opacity: 0; }
