@@ -14,7 +14,23 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Promptionary",
-  description: "Pictionary, in reverse — guess the AI prompt behind the image.",
+  description:
+    "Pictionary, in reverse. An AI paints from a secret prompt — you guess the prompt.",
+  metadataBase: new URL("https://promptionary.io"),
+  openGraph: {
+    title: "Promptionary",
+    description:
+      "Pictionary, in reverse. Guess the prompt behind the AI's painting.",
+    url: "https://promptionary.io",
+    siteName: "Promptionary",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Promptionary",
+    description:
+      "Pictionary, in reverse. Guess the prompt behind the AI's painting.",
+  },
 };
 
 export default function RootLayout({
