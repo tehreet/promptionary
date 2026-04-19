@@ -66,4 +66,10 @@ test.describe("design tokens", () => {
     await page.goto("/daily");
     await expect(page.locator("main").first()).toHaveClass(/game-canvas-page/);
   });
+
+  test("/leaders uses game-canvas", async ({ page }) => {
+    await page.goto("/leaders");
+    await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
+    await expect(page.locator(".game-card").first()).toBeVisible();
+  });
 });
