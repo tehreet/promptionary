@@ -41,8 +41,17 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (!room)
     return NextResponse.json({ error: "room not found" }, { status: 404 });
-  if (room.host_id !== user.id)
-    return NextResponse.json({ error: "not host" }, { status: 403 });
+  // Any room member can trigger finalize — the route is idempotent and
+  // relying only on the host's browser tab makes the game stall when
+  // they background the window.
+  const { data: membership } = await svc
+    .from("room_players")
+    .select("player_id")
+    .eq("room_id", room.id)
+    .eq("player_id", user.id)
+    .maybeSingle();
+  if (!membership)
+    return NextResponse.json({ error: "not a room member" }, { status: 403 });
   if (!["guessing", "scoring"].includes(room.phase)) {
     return NextResponse.json(
       { error: `wrong phase: ${room.phase}` },

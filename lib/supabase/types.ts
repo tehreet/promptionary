@@ -253,6 +253,7 @@ export type Database = {
       }
     }
     Functions: {
+      count_round_guesses: { Args: { p_round_id: string }; Returns: number }
       create_room: {
         Args: {
           p_display_name: string
@@ -264,6 +265,7 @@ export type Database = {
         }[]
       }
       generate_room_code: { Args: never; Returns: string }
+      is_room_member: { Args: { p_room_id: string }; Returns: boolean }
       join_room_by_code: {
         Args: { p_code: string; p_display_name: string }
         Returns: string

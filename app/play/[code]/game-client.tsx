@@ -86,6 +86,8 @@ export function GameClient({
   const generatingCalledRef = useRef<string | null>(null);
   const finalizeCalledRef = useRef<string | null>(null);
   const revealAdvanceRef = useRef<string | null>(null);
+  const roundNumRef = useRef<number>(room.round_num);
+  roundNumRef.current = room.round_num;
 
   const remaining = useCountdown(room.phase_ends_at);
 
@@ -162,19 +164,34 @@ export function GameClient({
         .eq("room_id", room.id);
       if (ps) setPlayers(ps as Player[]);
 
-      if (currentRound?.id) {
+      // Always fetch the round matching the CURRENT room.round_num, not the
+      // captured currentRound.id. Otherwise a previous round's reveal data
+      // can overwrite the new round's state during the transition.
+      const targetRoundNum = r?.round_num ?? roundNumRef.current;
+      if (targetRoundNum > 0) {
         const { data: rd } = await supabase
           .from("rounds_public")
           .select("id, round_num, prompt, image_url, ended_at")
-          .eq("id", currentRound.id)
+          .eq("room_id", room.id)
+          .eq("round_num", targetRoundNum)
           .maybeSingle();
-        if (rd) setCurrentRound((prev) => ({ ...(prev ?? rd), ...rd } as Round));
+        if (rd) {
+          setCurrentRound((prev) => {
+            if (prev && prev.id !== rd.id) {
+              // New round — reset per-round UI state.
+              setGuessSubmitted(false);
+              setMyGuess("");
+              setSubmissionCount(0);
+              setGuessesFromReveal([]);
+            }
+            return rd as Round;
+          });
 
-        const { count } = await supabase
-          .from("guesses")
-          .select("*", { count: "exact", head: true })
-          .eq("round_id", currentRound.id);
-        if (typeof count === "number") setSubmissionCount(count);
+          const { data: count } = await supabase.rpc("count_round_guesses", {
+            p_round_id: rd.id,
+          });
+          if (typeof count === "number") setSubmissionCount(count);
+        }
       }
     }, 2000);
 
@@ -184,8 +201,11 @@ export function GameClient({
     };
   }, [room.id, room.round_num, currentRound]);
 
-  // Fetch current round whenever round_num changes
+  // Fetch current round whenever round_num changes. Per-round UI state reset
+  // happens in the poller (where we detect id transitions) — duplicating it
+  // here would double-fire during phase=reveal→guessing transitions.
   useEffect(() => {
+    if (room.round_num <= 0) return;
     let cancel = false;
     (async () => {
       const supabase = supabaseRef.current;
@@ -196,11 +216,15 @@ export function GameClient({
         .eq("round_num", room.round_num)
         .maybeSingle();
       if (!cancel && data) {
-        setCurrentRound(data as Round);
-        setGuessSubmitted(false);
-        setMyGuess("");
-        setSubmissionCount(0);
-        setGuessesFromReveal([]);
+        setCurrentRound((prev) => {
+          if (prev && prev.id !== data.id) {
+            setGuessSubmitted(false);
+            setMyGuess("");
+            setSubmissionCount(0);
+            setGuessesFromReveal([]);
+          }
+          return data as Round;
+        });
       }
     })();
     return () => {
@@ -235,11 +259,14 @@ export function GameClient({
     })();
   }, [isHost, room.phase, currentRound?.id]);
 
-  // Host triggers /api/finalize-round when guessing timer hits 0
+  // Any member triggers /api/finalize-round when the guessing timer genuinely
+  // expires. Only fires when phase_ends_at is known and in the past —
+  // `remaining === 0` alone is ambiguous because useCountdown returns 0 when
+  // phase_ends_at is null (e.g. during generating/scoring).
   useEffect(() => {
-    if (!isHost) return;
     if (room.phase !== "guessing") return;
-    if (remaining > 0) return;
+    if (!room.phase_ends_at) return;
+    if (new Date(room.phase_ends_at).getTime() > Date.now()) return;
     if (!currentRound?.id) return;
     if (finalizeCalledRef.current === currentRound.id) return;
     finalizeCalledRef.current = currentRound.id;
@@ -254,7 +281,7 @@ export function GameClient({
         console.error(e);
       }
     })();
-  }, [isHost, room.phase, remaining, currentRound?.id]);
+  }, [room.phase, room.phase_ends_at, remaining, currentRound?.id]);
 
   // Host advances to next round when reveal timer hits 0
   useEffect(() => {
