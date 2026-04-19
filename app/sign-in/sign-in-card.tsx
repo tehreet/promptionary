@@ -1,11 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import type { Provider } from "@supabase/supabase-js";
 import { createSupabaseAuthBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasskeyContinueButton } from "@/components/passkey-buttons";
+
+type OAuthProvider = "google" | "discord" | "vercel";
+
+const PROVIDER_LABEL: Record<OAuthProvider, string> = {
+  google: "Google",
+  discord: "Discord",
+  vercel: "Vercel",
+};
 
 export function SignInCard({
   nextPath,
@@ -15,7 +24,7 @@ export function SignInCard({
   initialError: string | null;
 }) {
   const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState<null | "google" | "discord" | "email">(null);
+  const [busy, setBusy] = useState<null | OAuthProvider | "email">(null);
   const [error, setError] = useState<string | null>(initialError);
   const [sent, setSent] = useState(false);
 
@@ -26,7 +35,7 @@ export function SignInCard({
     return url.toString();
   };
 
-  async function oauth(provider: "google" | "discord") {
+  async function oauth(provider: OAuthProvider) {
     setBusy(provider);
     setError(null);
     const supabase = createSupabaseAuthBrowserClient();
@@ -37,19 +46,22 @@ export function SignInCard({
     // user_id (and any in-flight rooms / Daily guesses) survives the
     // upgrade. Otherwise do a fresh OAuth sign-in.
     const linking = !!user?.is_anonymous;
+    // "vercel" isn't in @supabase/auth-js's `Provider` union yet, but the
+    // REST API accepts any configured provider string at runtime.
+    const providerArg = provider as Provider;
     const { error: err } = linking
       ? await supabase.auth.linkIdentity({
-          provider,
+          provider: providerArg,
           options: { redirectTo: redirectTo() },
         })
       : await supabase.auth.signInWithOAuth({
-          provider,
+          provider: providerArg,
           options: { redirectTo: redirectTo() },
         });
     if (err) {
       setError(
         err.message.includes("provider is not enabled")
-          ? `${provider === "google" ? "Google" : "Discord"} sign-in isn't enabled yet. Ask the host to flip it on in the Supabase dashboard.`
+          ? `${PROVIDER_LABEL[provider]} sign-in isn't enabled yet. Ask the host to flip it on in the Supabase dashboard.`
           : err.message,
       );
       setBusy(null);
@@ -111,6 +123,28 @@ export function SignInCard({
           data-provider="discord"
         >
           {busy === "discord" ? "Redirecting…" : "Continue with Discord"}
+        </Button>
+        <Button
+          onClick={() => oauth("vercel")}
+          disabled={busy !== null}
+          className="w-full h-12 bg-black text-white hover:bg-black/90"
+          data-provider="vercel"
+        >
+          {busy === "vercel" ? (
+            "Redirecting…"
+          ) : (
+            <span className="inline-flex items-center gap-2">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 76 65"
+                className="h-4 w-auto"
+                fill="currentColor"
+              >
+                <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" />
+              </svg>
+              Continue with Vercel
+            </span>
+          )}
         </Button>
         <PasskeyContinueButton />
       </div>
