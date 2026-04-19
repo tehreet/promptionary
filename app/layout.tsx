@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Unbounded } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { SfxToggle } from "@/components/sfx-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -46,8 +48,13 @@ export const metadata: Metadata = {
 // Discord uses the first `theme-color` meta for the embed's left bar;
 // Safari/iOS uses it for the address bar tint.
 export const viewport: Viewport = {
-  // Site is light-only — theme-color mirrors --game-canvas-yellow.
-  themeColor: "#ffe15e",
+  // Light → cream canvas, Dark → deep-navy canvas. Home page overrides
+  // to yellow via its own .game-canvas-page class; Discord/Safari only
+  // read the first media-match so these are the addressbar/embed tints.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fff7d6" },
+    { media: "(prefers-color-scheme: dark)", color: "#14112e" },
+  ],
 };
 
 export default async function RootLayout({
@@ -76,17 +83,20 @@ export default async function RootLayout({
     <html
       lang="en"
       className={`${geist.variable} ${geistMono.variable} ${unbounded.variable} h-full antialiased`}
-      style={{ colorScheme: "light" }}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-          <SfxToggle />
-          <UserMenu
-            initialIsAnon={initialAuth.isAnon}
-            initialProfile={initialAuth.profile}
-          />
-        </div>
-        {children}
+        <ThemeProvider>
+          <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+            <SfxToggle />
+            <ThemeToggle />
+            <UserMenu
+              initialIsAnon={initialAuth.isAnon}
+              initialProfile={initialAuth.profile}
+            />
+          </div>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

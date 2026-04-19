@@ -591,13 +591,7 @@ function GameClientInner({
   }, [competitors, isTeams]);
 
   return (
-    <main
-      className={`min-h-screen flex flex-col items-center gap-6 px-6 py-10 ${
-        room.phase === "reveal" || room.phase === "game_over"
-          ? "game-canvas-page"
-          : "game-canvas-dark"
-      }`}
-    >
+    <main className="min-h-screen flex flex-col items-center gap-6 px-6 py-10 game-canvas">
       <header className="w-full max-w-4xl flex items-center justify-between gap-2">
         <div>
           <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted-foreground">

@@ -208,7 +208,7 @@ export function DailyClient(props: {
   return (
     <main
       data-daily-date={props.date}
-      className="min-h-screen game-canvas-page flex flex-col items-center gap-6 px-6 py-10"
+      className="min-h-screen game-canvas flex flex-col items-center gap-6 px-6 py-10"
     >
       <header className="text-center space-y-3 max-w-2xl flex flex-col items-center">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">

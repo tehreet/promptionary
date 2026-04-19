@@ -28,9 +28,7 @@ test.describe("design tokens", () => {
     await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
   });
 
-  test("in-game (non-lobby) flips main to game-canvas-dark", async ({
-    browser,
-  }) => {
+  test("in-game uses the shared game-canvas", async ({ browser }) => {
     test.setTimeout(120_000);
     const hostCtx = await browser.newContext();
     const host = await hostCtx.newPage();
@@ -44,10 +42,10 @@ test.describe("design tokens", () => {
 
     await host.getByRole("button", { name: /Start game/ }).click();
 
-    // Whichever phase lands first after lobby — prompting, generating, or
-    // guessing — all use game-canvas-dark. Don't assume party-mode.
-    await host.waitForSelector("main.game-canvas-dark", { timeout: 60_000 });
-    await expect(host.locator("main").first()).toHaveClass(/game-canvas-dark/);
+    // Every non-lobby phase uses the single .game-canvas class now
+    // (collapsed from the prior three-canvas split).
+    await host.waitForSelector("main.game-canvas", { timeout: 60_000 });
+    await expect(host.locator("main").first()).toHaveClass(/game-canvas/);
 
     // Player-chip rail replaces the old text-white/bg-inline avatar circles.
     await expect(host.locator(".player-chip").first()).toBeVisible();
@@ -62,9 +60,9 @@ test.describe("design tokens", () => {
   // recap.spec.ts (flipboard tokens) and, implicitly, by full-round.spec.ts.
   // Leaving the extra smoke out to keep this suite fast + deterministic.
 
-  test("/daily uses game-canvas-page", async ({ page }) => {
+  test("/daily uses the shared game-canvas", async ({ page }) => {
     await page.goto("/daily");
-    await expect(page.locator("main").first()).toHaveClass(/game-canvas-page/);
+    await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
   });
 
   test("/leaders uses game-canvas", async ({ page }) => {
