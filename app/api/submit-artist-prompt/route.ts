@@ -8,12 +8,45 @@ import { generateImagePng, tagPromptRoles } from "@/lib/gemini";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Unified error shape: { error: <short machine-ish label>, detail: <user-friendly reason> }
+type ErrorBody = { error: string; detail: string };
+function errJson(body: ErrorBody, status: number) {
+  return NextResponse.json(body, { status });
+}
+
+// If the artist hits an error right before the prompting phase timer expires,
+// they'd get punished with basically no time to fix and retry. Bump the
+// deadline out to give them at least 20s of breathing room.
+async function bumpPromptingDeadlineIfTight(
+  svc: ReturnType<typeof createSupabaseServiceClient>,
+  roomId: string,
+) {
+  const { data: room } = await svc
+    .from("rooms")
+    .select("phase, phase_ends_at")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (!room || room.phase !== "prompting") return;
+  const now = Date.now();
+  const endsAt = room.phase_ends_at ? new Date(room.phase_ends_at).getTime() : 0;
+  const remainingMs = endsAt - now;
+  if (remainingMs < 10_000) {
+    await svc
+      .from("rooms")
+      .update({ phase_ends_at: new Date(now + 20_000).toISOString() })
+      .eq("id", roomId);
+  }
+}
+
 export async function POST(req: Request) {
   const { round_id, prompt } = await req.json();
   if (!round_id || typeof prompt !== "string") {
-    return NextResponse.json(
-      { error: "round_id and prompt required" },
-      { status: 400 },
+    return errJson(
+      {
+        error: "bad_request",
+        detail: "round id and prompt are required",
+      },
+      400,
     );
   }
 
@@ -21,7 +54,12 @@ export async function POST(req: Request) {
   const {
     data: { user },
   } = await userSupabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthed" }, { status: 401 });
+  if (!user) {
+    return errJson(
+      { error: "unauthed", detail: "you're not signed in to this room" },
+      401,
+    );
+  }
 
   // Validate artist + advance DB phase via RPC (auth.uid() applied).
   const { error: rpcError } = await userSupabase.rpc("submit_artist_prompt", {
@@ -29,9 +67,22 @@ export async function POST(req: Request) {
     p_prompt: prompt.trim(),
   });
   if (rpcError) {
-    return NextResponse.json(
-      { error: "submit failed", detail: rpcError.message },
-      { status: 400 },
+    // RPC failed: we never left the prompting phase, so just give the artist
+    // a bit more time if they were near the buzzer.
+    try {
+      const svc = createSupabaseServiceClient();
+      const { data: round } = await svc
+        .from("rounds")
+        .select("room_id")
+        .eq("id", round_id)
+        .maybeSingle();
+      if (round?.room_id) await bumpPromptingDeadlineIfTight(svc, round.room_id);
+    } catch {
+      // bump is best-effort — don't mask the underlying error.
+    }
+    return errJson(
+      { error: "submit_failed", detail: rpcError.message },
+      400,
     );
   }
 
@@ -42,7 +93,10 @@ export async function POST(req: Request) {
     .eq("id", round_id)
     .maybeSingle();
   if (!round || !round.prompt) {
-    return NextResponse.json({ error: "round not found" }, { status: 404 });
+    return errJson(
+      { error: "round_not_found", detail: "we couldn't find your round" },
+      404,
+    );
   }
 
   const { data: room } = await svc
@@ -50,8 +104,12 @@ export async function POST(req: Request) {
     .select("id, guess_seconds")
     .eq("id", round.room_id)
     .maybeSingle();
-  if (!room)
-    return NextResponse.json({ error: "room not found" }, { status: 404 });
+  if (!room) {
+    return errJson(
+      { error: "room_not_found", detail: "we couldn't find the room" },
+      404,
+    );
+  }
 
   let tokens: Awaited<ReturnType<typeof tagPromptRoles>>["tokens"];
   let pngBuffer: Buffer;
@@ -61,7 +119,7 @@ export async function POST(req: Request) {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[submit-artist-prompt] gemini failed", message);
-    // Drop back to prompting so the artist can try again.
+    // Drop back to prompting so the artist can try again with a roomy timer.
     await svc
       .from("rooms")
       .update({
@@ -69,9 +127,13 @@ export async function POST(req: Request) {
         phase_ends_at: new Date(Date.now() + 60_000).toISOString(),
       })
       .eq("id", round.room_id);
-    return NextResponse.json(
-      { error: "image gen failed", detail: message },
-      { status: 502 },
+    return errJson(
+      {
+        error: "image_gen_failed",
+        detail:
+          "the AI rejected that prompt — try rephrasing or pick a different subject",
+      },
+      502,
     );
   }
 
@@ -83,9 +145,20 @@ export async function POST(req: Request) {
       upsert: true,
     });
   if (upload.error) {
-    return NextResponse.json(
-      { error: "upload failed: " + upload.error.message },
-      { status: 500 },
+    // Drop back to prompting so the artist can retry.
+    await svc
+      .from("rooms")
+      .update({
+        phase: "prompting",
+        phase_ends_at: new Date(Date.now() + 60_000).toISOString(),
+      })
+      .eq("id", round.room_id);
+    return errJson(
+      {
+        error: "upload_failed",
+        detail: "we couldn't save the image — please try again",
+      },
+      500,
     );
   }
   const { data: publicUrl } = svc.storage

@@ -1223,12 +1223,36 @@ function ArtistPromptingView({
   const [prompt, setPrompt] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // After an error lands, refocus the textarea so the artist can immediately
+  // keep typing / fixing. The form is re-rendered (submitting flipped back to
+  // false) so autoFocus on mount doesn't help here.
+  useEffect(() => {
+    if (error && !submitting) {
+      // next tick so the textarea is definitely back in the DOM
+      const id = requestAnimationFrame(() => {
+        const ta = textareaRef.current;
+        if (ta) {
+          ta.focus();
+          // Move caret to end so typing continues from where they left off.
+          const len = ta.value.length;
+          try {
+            ta.setSelectionRange(len, len);
+          } catch {
+            // some browsers throw for non-text inputs; textarea is fine but be safe
+          }
+        }
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [error, submitting]);
 
   async function submit() {
     if (!currentRound?.id) return;
     const text = prompt.trim();
     if (text.length < 4) {
-      setError("at least 4 characters");
+      setError("Write at least 4 characters.");
       return;
     }
     setSubmitting(true);
@@ -1240,8 +1264,12 @@ function ArtistPromptingView({
         body: JSON.stringify({ round_id: currentRound.id, prompt: text }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.detail || body.error || `status ${res.status}`);
+        const body = (await res.json().catch(() => ({}))) as {
+          detail?: string;
+          error?: string;
+        };
+        setError(body.detail || body.error || `Something went wrong (${res.status}).`);
+        // Keep draft intact — user can tweak and retry.
         setSubmitting(false);
       }
     } catch (e) {
@@ -1277,8 +1305,13 @@ function ArtistPromptingView({
             className="w-full flex flex-col gap-3"
           >
             <Textarea
+              ref={textareaRef}
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                // Clear the error on the first keystroke so it doesn't nag.
+                if (error) setError(null);
+              }}
               onKeyDown={(e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
                   e.preventDefault();
@@ -1289,6 +1322,8 @@ function ArtistPromptingView({
               maxLength={240}
               rows={4}
               autoFocus
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "artist-prompt-error" : undefined}
               className="text-lg rounded-xl min-h-[120px] resize-y leading-relaxed p-4"
             />
             <div className="flex items-center justify-between text-xs opacity-70">
@@ -1296,7 +1331,12 @@ function ArtistPromptingView({
               <span>⌘/Ctrl + Enter to send</span>
             </div>
             {error && (
-              <div className="game-card bg-destructive/20 border-destructive text-destructive-foreground p-4 text-sm">
+              <div
+                id="artist-prompt-error"
+                role="alert"
+                data-artist-error="1"
+                className="bg-red-500/15 border border-red-500/30 rounded-xl px-3 py-2 text-sm"
+              >
                 {error}
               </div>
             )}
