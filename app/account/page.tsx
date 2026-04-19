@@ -56,12 +56,20 @@ export default async function AccountPage() {
 
       <AccountClient />
 
-      <Link
-        href="/"
-        className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
-      >
-        ← Home
-      </Link>
+      <div className="flex gap-4 text-xs text-muted-foreground">
+        <Link
+          href="/leaders"
+          className="hover:text-foreground underline-offset-4 hover:underline"
+        >
+          🏆 Leaders
+        </Link>
+        <Link
+          href="/"
+          className="hover:text-foreground underline-offset-4 hover:underline"
+        >
+          ← Home
+        </Link>
+      </div>
     </main>
   );
 }
