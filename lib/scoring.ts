@@ -43,6 +43,7 @@ export function scoreGuess({
   submittedAt,
   phaseStartedAt,
   guessSeconds,
+  blitz = false,
 }: {
   guessText: string;
   guessEmbedding: number[];
@@ -51,6 +52,9 @@ export function scoreGuess({
   submittedAt: Date;
   phaseStartedAt: Date;
   guessSeconds: number;
+  // Blitz variant doubles the speed-bonus scale. Default false so non-blitz
+  // rooms keep their existing feel.
+  blitz?: boolean;
 }): ScoreBreakdown {
   const guessSet = new Set(tokenize(guessText));
 
@@ -80,8 +84,12 @@ export function scoreGuess({
     const timeFrac = Math.max(0, 1 - elapsedMs / (guessSeconds * 1000));
     // Scale peaks at 10 when preBonus >= 60 (a great guess), down to 2
     // when preBonus is marginal. Keeps early-submit always worth a bit.
+    // Blitz rooms double both the floor and the peak so the speed bonus is
+    // the star of the show when the clock is short.
     const qualityFrac = Math.min(1, preBonus / 60);
-    speed_bonus = Math.round(timeFrac * (2 + qualityFrac * 8));
+    const base = blitz ? 4 : 2;
+    const peak = blitz ? 16 : 8;
+    speed_bonus = Math.round(timeFrac * (base + qualityFrac * peak));
   }
 
   return { subject_score, style_score, semantic_score, speed_bonus };
