@@ -41,7 +41,7 @@ export default async function PublicProfilePage({
   const initial = profile.display_name[0]?.toUpperCase() ?? "?";
 
   return (
-    <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-6 px-6 py-12">
+    <main className="game-canvas min-h-screen flex flex-col items-center gap-6 px-6 py-12">
       <header className="flex flex-col items-center gap-3 text-center">
         {profile.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -53,17 +53,21 @@ export default async function PublicProfilePage({
         ) : (
           <span
             aria-hidden
-            className="h-24 w-24 rounded-full flex items-center justify-center text-white font-black text-4xl shadow-lg border-4 border-card"
-            style={{ background: colorForPlayer(profile.id) }}
+            className="player-chip w-24 h-24 text-4xl"
+            style={
+              {
+                ["--chip-color"]: colorForPlayer(profile.id),
+              } as React.CSSProperties
+            }
           >
             {initial}
           </span>
         )}
-        <h1 className="text-hero text-4xl sm:text-5xl">
-          {profile.display_name}
+        <h1 className="game-hero text-4xl sm:text-5xl">
+          <span className="game-hero-mark">@{profile.handle}</span>
         </h1>
-        <p className="text-sm text-muted-foreground font-mono">
-          @{profile.handle}
+        <p className="text-sm text-muted-foreground">
+          {profile.display_name}
         </p>
       </header>
 

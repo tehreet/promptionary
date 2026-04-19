@@ -125,16 +125,7 @@ export function UserMenu({
             className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
-          <span
-            className="h-8 w-8 rounded-full flex items-center justify-center text-black font-black text-xs"
-            style={{
-              backgroundImage:
-                "linear-gradient(135deg, #6366f1 0%, #d946ef 55%, #f43f5e 100%)",
-              color: "white",
-            }}
-          >
-            {initial}
-          </span>
+          <span className="player-chip w-8 h-8 text-xs">{initial}</span>
         )}
         <span className="hidden sm:inline max-w-[8rem] truncate">
           {profile?.display_name}
@@ -143,7 +134,7 @@ export function UserMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-12 z-50 min-w-[12rem] rounded-xl border border-border bg-popover text-popover-foreground shadow-xl p-1"
+          className="game-card bg-[var(--game-paper)] absolute right-0 top-12 z-50 min-w-[12rem] text-popover-foreground p-1"
         >
           <div className="px-3 py-2 text-xs text-muted-foreground">
             Signed in as

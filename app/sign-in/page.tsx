@@ -11,12 +11,12 @@ export default async function SignInPage({
 }) {
   const { error, next } = await searchParams;
   return (
-    <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center justify-center gap-6 px-6 py-16">
+    <main className="game-canvas min-h-screen flex flex-col items-center justify-center gap-6 px-6 py-16">
       <header className="text-center space-y-2 max-w-md">
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
           Sign in
         </p>
-        <h1 className="text-hero text-4xl sm:text-5xl">Save your score</h1>
+        <h1 className="game-hero text-4xl sm:text-5xl">Save your score</h1>
         <p className="text-sm text-muted-foreground">
           Keep your Daily streak and top guesses across devices. Or keep playing
           as a guest — invite links work either way.

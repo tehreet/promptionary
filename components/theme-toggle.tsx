@@ -15,10 +15,21 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       type="button"
       onClick={() => setTheme(dark ? "light" : "dark")}
       aria-label={`Switch to ${dark ? "light" : "dark"} mode`}
-      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/70 backdrop-blur text-foreground shadow-sm hover:bg-card transition ${className}`}
+      className={`sticker ${className}`}
+      style={
+        {
+          ["--sticker-tilt"]: "0deg",
+          ...(dark
+            ? {
+                background: "var(--game-ink)",
+                color: "var(--game-canvas-yellow)",
+              }
+            : {}),
+        } as React.CSSProperties
+      }
       suppressHydrationWarning
     >
-      <span aria-hidden className="text-lg leading-none">
+      <span aria-hidden className="text-base leading-none">
         {dark ? "☀︎" : "☾"}
       </span>
     </button>

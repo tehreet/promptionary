@@ -72,4 +72,15 @@ test.describe("design tokens", () => {
     await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
     await expect(page.locator(".game-card").first()).toBeVisible();
   });
+
+  test("/sign-in uses game-canvas", async ({ page }) => {
+    await page.goto("/sign-in");
+    await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
+  });
+
+  test("/account uses game-canvas", async ({ page }) => {
+    await page.goto("/");
+    await page.goto("/account");
+    await expect(page.locator("main").first()).toHaveClass(/game-canvas/);
+  });
 });
