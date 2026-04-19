@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Unbounded } from "next/font/google";
-import { ThemeProvider } from "@/components/theme-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { SfxToggle } from "@/components/sfx-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -48,12 +46,8 @@ export const metadata: Metadata = {
 // Discord uses the first `theme-color` meta for the embed's left bar;
 // Safari/iOS uses it for the address bar tint.
 export const viewport: Viewport = {
-  themeColor: [
-    // Hex mirrors --game-canvas-yellow (light) / --game-canvas-dark (dark).
-    // theme-color is consumed by Discord embeds + Safari — must be literal hex.
-    { media: "(prefers-color-scheme: light)", color: "#ffe15e" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0920" },
-  ],
+  // Site is dark-only — theme-color mirrors --game-canvas-dark.
+  themeColor: "#0b0920",
 };
 
 export default async function RootLayout({
@@ -81,21 +75,17 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geist.variable} ${geistMono.variable} ${unbounded.variable} h-full antialiased`}
-      suppressHydrationWarning
+      className={`dark ${geist.variable} ${geistMono.variable} ${unbounded.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <ThemeProvider>
-          <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-            <SfxToggle />
-            <ThemeToggle />
-            <UserMenu
-              initialIsAnon={initialAuth.isAnon}
-              initialProfile={initialAuth.profile}
-            />
-          </div>
-          {children}
-        </ThemeProvider>
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+          <SfxToggle />
+          <UserMenu
+            initialIsAnon={initialAuth.isAnon}
+            initialProfile={initialAuth.profile}
+          />
+        </div>
+        {children}
       </body>
     </html>
   );

@@ -237,9 +237,19 @@
   /* Canvas utilities. `page` variant force-locks light mode for the
      yellow marketing canvas; the other two flip with the dark class. */
   .game-canvas-page {
-    background: var(--game-canvas-yellow);
-    color: var(--game-ink);
+    /* Yellow paper canvas — always reads as a light surface (even though
+       the site is now force-dark), so hardcode navy ink for text. */
+    background: #ffe15e;
+    color: #1e1b4d;
     color-scheme: light;
+  }
+  .game-canvas-page .game-card,
+  .game-canvas-page .sticker {
+    border-color: #1e1b4d;
+    box-shadow: 4px 4px 0 #1e1b4d;
+  }
+  .game-canvas-page .game-hero {
+    color: #1e1b4d;
   }
   .game-canvas {
     background: var(--game-canvas-warm);
@@ -317,12 +327,12 @@
     gap: 6px;
     padding: 5px 14px;
     border-radius: 999px;
-    background: var(--game-ink);
-    color: var(--game-canvas-yellow);
+    background: var(--game-canvas-dark);
+    color: var(--game-cream);
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.15em;
-    border: 2px solid var(--game-ink);
+    border: 2px solid var(--game-cream);
   }
 
   /* Pulsing dot for presence callouts. */
