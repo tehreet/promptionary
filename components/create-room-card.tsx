@@ -131,6 +131,7 @@ export function CreateRoomCard({
 
           <Button
             type="submit"
+            aria-label="Create Room"
             className="w-full h-12 rounded-xl font-heading font-black text-base border-2"
             style={{
               background: "var(--game-canvas-yellow)",

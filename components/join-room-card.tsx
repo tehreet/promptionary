@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,6 @@ export function JoinRoomCard({
     () => defaultName ?? randomDisplayName(),
     [defaultName],
   );
-  const codeRef = useRef<HTMLInputElement>(null);
   return (
     <Card
       className="w-full max-w-sm game-card md:rotate-1 p-0 border-none"
@@ -23,7 +22,7 @@ export function JoinRoomCard({
     >
       <CardHeader>
         <CardTitle className="text-2xl font-heading font-black">
-          Join a Room
+          Join a room
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -45,7 +44,6 @@ export function JoinRoomCard({
             <Input
               id="join-code"
               name="code"
-              ref={codeRef}
               onChange={(e) => {
                 e.currentTarget.value = e.currentTarget.value.toUpperCase();
               }}
@@ -58,6 +56,7 @@ export function JoinRoomCard({
           </div>
           <Button
             type="submit"
+            aria-label="Join Room"
             className="w-full h-12 rounded-xl font-heading font-black text-base border-2"
             style={{
               background: "var(--game-pink)",
@@ -66,7 +65,7 @@ export function JoinRoomCard({
               boxShadow: "3px 3px 0 var(--game-ink)",
             }}
           >
-            Enter →
+            Join →
           </Button>
         </form>
       </CardContent>
