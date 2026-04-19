@@ -7,9 +7,10 @@ export function ThemeProvider(props: ComponentProps<typeof NextThemesProvider>) 
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="system"
-      enableSystem
+      defaultTheme="light"
+      enableSystem={false}
       disableTransitionOnChange
+      storageKey="promptionary-theme"
       {...props}
     />
   );
