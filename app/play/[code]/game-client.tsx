@@ -41,6 +41,12 @@ type Player = {
   is_host: boolean;
   is_spectator?: boolean;
   score: number;
+  team?: number | null;
+};
+
+const TEAM_META: Record<1 | 2, { label: string; color: string }> = {
+  1: { label: "Team 1", color: "#6366f1" },
+  2: { label: "Team 2", color: "#f43f5e" },
 };
 
 type Round = {
@@ -233,7 +239,7 @@ function GameClientInner({
 
       const { data: ps } = await supabase
         .from("room_players")
-        .select("player_id, display_name, is_host, is_spectator, score")
+        .select("player_id, display_name, is_host, is_spectator, score, team")
         .eq("room_id", room.id);
       if (ps) setPlayers(ps as Player[]);
 
@@ -558,6 +564,23 @@ function GameClientInner({
     () => [...competitors].sort((a, b) => b.score - a.score),
     [competitors],
   );
+  const isTeams = room.mode === "teams";
+  const teamLeaderboard = useMemo(() => {
+    if (!isTeams) return [] as Array<{
+      team: 1 | 2;
+      avg: number;
+      total: number;
+      members: Player[];
+    }>;
+    return ([1, 2] as const)
+      .map((t) => {
+        const members = competitors.filter((p) => p.team === t);
+        const total = members.reduce((acc, p) => acc + p.score, 0);
+        const avg = members.length > 0 ? Math.round(total / members.length) : 0;
+        return { team: t, total, avg, members };
+      })
+      .sort((a, b) => b.avg - a.avg);
+  }, [competitors, isTeams]);
 
   return (
     <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-6 px-6 py-10">
@@ -588,34 +611,69 @@ function GameClientInner({
       {/* Running scoreboard — visible every phase except game_over (which has its own) */}
       {room.phase !== "game_over" && leaderboard.length > 0 && (
         <section className="w-full max-w-4xl rounded-2xl bg-card border border-border shadow-sm px-4 py-3 text-foreground">
-          <ul className="flex flex-wrap items-center gap-3 justify-center">
-            {leaderboard.map((p, i) => (
-              <li
-                key={p.player_id}
-                className="flex items-center gap-2 rounded-full bg-muted text-foreground pl-3 pr-2 py-1"
-              >
-                <span className="text-xs opacity-60 font-black w-4 text-right">
-                  {i + 1}
-                </span>
-                <span
-                  className="h-6 w-6 rounded-full flex items-center justify-center text-black text-xs font-black"
-                  style={{ background: colorForPlayer(p.player_id) }}
+          {isTeams && (
+            <div
+              data-team-scoreboard="1"
+              className="flex justify-center gap-3 mb-3"
+            >
+              {teamLeaderboard.map((t) => (
+                <div
+                  key={t.team}
+                  data-team-chip={t.team}
+                  className="rounded-full border-2 px-4 py-1 text-sm font-black flex items-center gap-2"
+                  style={{
+                    borderColor: TEAM_META[t.team].color,
+                    color: TEAM_META[t.team].color,
+                  }}
                 >
-                  {p.display_name[0]?.toUpperCase()}
-                </span>
-                <span className="text-sm font-semibold truncate max-w-[8rem]">
-                  {p.display_name}
-                </span>
-                <span className="font-black font-mono">{p.score}</span>
-                {isHost && p.player_id !== currentPlayerId && (
-                  <HostControls
-                    roomId={room.id}
-                    victimId={p.player_id}
-                    victimName={p.display_name}
-                  />
-                )}
-              </li>
-            ))}
+                  {TEAM_META[t.team].label}
+                  <span className="font-mono text-base">{t.avg}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <ul className="flex flex-wrap items-center gap-3 justify-center">
+            {leaderboard.map((p, i) => {
+              const teamColor =
+                isTeams && (p.team === 1 || p.team === 2)
+                  ? TEAM_META[p.team as 1 | 2].color
+                  : null;
+              return (
+                <li
+                  key={p.player_id}
+                  data-team={p.team ?? undefined}
+                  className="flex items-center gap-2 rounded-full bg-muted text-foreground pl-3 pr-2 py-1"
+                  style={
+                    teamColor
+                      ? {
+                          boxShadow: `inset 0 0 0 2px ${teamColor}`,
+                        }
+                      : undefined
+                  }
+                >
+                  <span className="text-xs opacity-60 font-black w-4 text-right">
+                    {i + 1}
+                  </span>
+                  <span
+                    className="h-6 w-6 rounded-full flex items-center justify-center text-black text-xs font-black"
+                    style={{ background: colorForPlayer(p.player_id) }}
+                  >
+                    {p.display_name[0]?.toUpperCase()}
+                  </span>
+                  <span className="text-sm font-semibold truncate max-w-[8rem]">
+                    {p.display_name}
+                  </span>
+                  <span className="font-black font-mono">{p.score}</span>
+                  {isHost && p.player_id !== currentPlayerId && (
+                    <HostControls
+                      roomId={room.id}
+                      victimId={p.player_id}
+                      victimName={p.display_name}
+                    />
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {spectators.length > 0 && (
             <p className="text-xs opacity-70 text-center mt-2">
@@ -795,16 +853,92 @@ function GameClientInner({
 
           {room.phase === "game_over" && (
             <>
-              <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-6 mt-4">
-                <p className="text-center text-xs uppercase tracking-widest opacity-70 mb-3">
-                  Final leaderboard
-                </p>
-                <ul className="space-y-2">
-                  {leaderboard.map((p, i) => (
-                    <LeaderboardRow key={p.player_id} rank={i + 1} player={p} />
-                  ))}
-                </ul>
-              </div>
+              {isTeams ? (
+                <div
+                  data-team-final="1"
+                  className="w-full bg-card border border-border shadow-sm rounded-2xl p-6 mt-4 space-y-4"
+                >
+                  <p className="text-center text-xs uppercase tracking-widest opacity-70">
+                    Final team leaderboard
+                  </p>
+                  <ul className="space-y-3">
+                    {teamLeaderboard.map((t, i) => (
+                      <li
+                        key={t.team}
+                        data-team-rank={i + 1}
+                        className="rounded-2xl border-2 p-4"
+                        style={{
+                          borderColor: TEAM_META[t.team].color,
+                          background: `color-mix(in oklab, ${TEAM_META[t.team].color} 12%, transparent)`,
+                        }}
+                      >
+                        <div className="flex items-baseline justify-between gap-3">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-sm font-black opacity-60">
+                              #{i + 1}
+                            </span>
+                            <span
+                              className="font-heading font-black text-xl"
+                              style={{ color: TEAM_META[t.team].color }}
+                            >
+                              {TEAM_META[t.team].label}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-mono font-black text-3xl">
+                              {t.avg}
+                            </p>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                              avg / member
+                            </p>
+                          </div>
+                        </div>
+                        <ul className="mt-3 flex flex-wrap gap-2">
+                          {t.members
+                            .slice()
+                            .sort((a, b) => b.score - a.score)
+                            .map((m) => (
+                              <li
+                                key={m.player_id}
+                                className="rounded-full bg-card border border-border px-3 py-1 text-xs flex items-center gap-2"
+                              >
+                                <span
+                                  className="h-5 w-5 rounded-full flex items-center justify-center text-black font-black text-[10px]"
+                                  style={{
+                                    background: colorForPlayer(m.player_id),
+                                  }}
+                                >
+                                  {m.display_name[0]?.toUpperCase()}
+                                </span>
+                                <span className="font-semibold">
+                                  {m.display_name}
+                                </span>
+                                <span className="font-mono font-black">
+                                  {m.score}
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="w-full bg-card border border-border shadow-sm rounded-2xl p-6 mt-4">
+                  <p className="text-center text-xs uppercase tracking-widest opacity-70 mb-3">
+                    Final leaderboard
+                  </p>
+                  <ul className="space-y-2">
+                    {leaderboard.map((p, i) => (
+                      <LeaderboardRow
+                        key={p.player_id}
+                        rank={i + 1}
+                        player={p}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
               <PlayAgainControls room={room} isHost={isHost} />
             </>
           )}

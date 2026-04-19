@@ -29,7 +29,7 @@ export default async function LobbyPage({
 
   const { data: members } = await supabase
     .from("room_players")
-    .select("player_id, display_name, is_host, is_spectator, score")
+    .select("player_id, display_name, is_host, is_spectator, score, team")
     .eq("room_id", room.id);
 
   const me = members?.find((m) => m.player_id === user.id);

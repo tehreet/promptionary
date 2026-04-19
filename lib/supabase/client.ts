@@ -55,6 +55,11 @@ export function createSupabaseBrowserClient(): SupabaseClient {
   );
   const session = readAuthCookie();
   if (session?.access_token) {
+    // setSession is async; the realtime transport won't know about the JWT
+    // until it resolves. Pushing the token directly to realtime.setAuth
+    // synchronously avoids a race where channel.subscribe() connects
+    // anonymously and then silently fails on anything that needs auth.
+    client.realtime.setAuth(session.access_token);
     client.auth.setSession({
       access_token: session.access_token,
       refresh_token: session.refresh_token ?? "",

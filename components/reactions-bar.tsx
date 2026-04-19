@@ -48,20 +48,17 @@ export function ReactionsBar({
   }
 
   function fire(emoji: string) {
-    const el = targetRef.current;
-    if (!channel || !el) return;
-    const rect = el.getBoundingClientRect();
-    // Send from a random spot at the bottom of the image so reactions rise
-    // from various positions, not stacked.
     const x = 0.15 + Math.random() * 0.7;
     const y = 0.85;
+    // Always render locally so the clicker sees instant feedback even if the
+    // realtime channel hasn't finished subscribing yet.
+    spawn(emoji, x, y, player.color);
+    if (!channel) return;
     channel.send({
       type: "broadcast",
       event: "reaction",
       payload: { emoji, x, y, color: player.color },
     });
-    spawn(emoji, x, y, player.color);
-    void rect; // not used right now; kept for future client-side placement
   }
 
   return (

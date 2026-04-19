@@ -29,6 +29,20 @@ type Player = {
   display_name: string;
   is_host: boolean;
   score: number;
+  team?: number | null;
+};
+
+const TEAM_META: Record<1 | 2, { label: string; color: string; bg: string }> = {
+  1: {
+    label: "Team 1",
+    color: "#6366f1",
+    bg: "color-mix(in oklab, #6366f1 18%, transparent)",
+  },
+  2: {
+    label: "Team 2",
+    color: "#f43f5e",
+    bg: "color-mix(in oklab, #f43f5e 18%, transparent)",
+  },
 };
 
 export function LobbyClient(props: {
@@ -69,7 +83,10 @@ function LobbyClientInner({
   const [hostId, setHostId] = useState(room.host_id);
   const [isPending, startTransition] = useTransition();
   const [starting, setStarting] = useState(false);
+  const [mode, setMode] = useState(room.mode ?? "party");
+  const [teamsBusy, setTeamsBusy] = useState(false);
   const isHost = hostId === currentPlayerId;
+  const teamsOn = mode === "teams";
 
   useEffect(() => {
     if (phase !== "lobby") router.refresh();
@@ -128,9 +145,14 @@ function LobbyClientInner({
           filter: `id=eq.${room.id}`,
         },
         (payload) => {
-          const next = payload.new as { phase: string; host_id: string };
+          const next = payload.new as {
+            phase: string;
+            host_id: string;
+            mode?: string;
+          };
           setPhase(next.phase);
           if (next.host_id) setHostId(next.host_id);
+          if (next.mode) setMode(next.mode);
         },
       )
       .subscribe();
@@ -141,16 +163,17 @@ function LobbyClientInner({
     const poll = setInterval(async () => {
       const { data } = await supabase
         .from("room_players")
-        .select("player_id, display_name, is_host, score")
+        .select("player_id, display_name, is_host, score, team")
         .eq("room_id", room.id);
       if (data) setPlayers(data as Player[]);
       const { data: r } = await supabase
         .from("rooms")
-        .select("phase, host_id")
+        .select("phase, host_id, mode")
         .eq("id", room.id)
         .maybeSingle();
       if (r?.phase) setPhase(r.phase);
       if (r?.host_id) setHostId(r.host_id);
+      if (r?.mode) setMode(r.mode);
     }, 2000);
 
     return () => {
@@ -170,6 +193,61 @@ function LobbyClientInner({
       setStarting(false);
     }
   }
+
+  async function handleToggleTeams(nextOn: boolean) {
+    setTeamsBusy(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.rpc("set_room_mode", {
+        p_room_id: room.id,
+        p_mode: nextOn ? "teams" : "party",
+      });
+      if (error) throw error;
+      setMode(nextOn ? "teams" : "party");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "failed to toggle teams");
+    } finally {
+      setTeamsBusy(false);
+    }
+  }
+
+  async function handleAutoBalance() {
+    setTeamsBusy(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.rpc("auto_balance_teams", {
+        p_room_id: room.id,
+      });
+      if (error) throw error;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "failed to auto-balance");
+    } finally {
+      setTeamsBusy(false);
+    }
+  }
+
+  async function handleSwapTeam(playerId: string, currentTeam: number | null) {
+    const nextTeam = currentTeam === 1 ? 2 : 1;
+    const supabase = createSupabaseBrowserClient();
+    const prev = players;
+    setPlayers((list) =>
+      list.map((p) =>
+        p.player_id === playerId ? { ...p, team: nextTeam } : p,
+      ),
+    );
+    const { error } = await supabase.rpc("set_player_team", {
+      p_room_id: room.id,
+      p_player_id: playerId,
+      p_team: nextTeam,
+    });
+    if (error) {
+      setPlayers(prev);
+      alert(error.message);
+    }
+  }
+
+  const teamPlayers = (t: 1 | 2) => players.filter((p) => p.team === t);
+  const unassignedPlayers = players.filter((p) => p.team == null);
 
   return (
     <main className="min-h-screen promptionary-gradient promptionary-grain flex flex-col items-center gap-8 px-6 py-12">
@@ -202,51 +280,199 @@ function LobbyClientInner({
         </div>
       )}
 
-      <section className="w-full max-w-2xl space-y-3">
-        <h2 className="text-lg font-heading font-black text-foreground/80">
-          Players ({players.length})
-        </h2>
-        <ul className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {players.map((p) => (
-            <li
-              key={p.player_id}
-              className="rounded-2xl px-4 py-3 bg-card border border-border flex items-center gap-3 shadow-sm"
+      {isHost && room.mode !== "artist" && phase === "lobby" && (
+        <div
+          data-teams-controls="1"
+          className="w-full max-w-2xl flex flex-wrap items-center justify-center gap-3 rounded-2xl bg-card border border-border px-4 py-3 shadow-sm"
+        >
+          <label className="inline-flex items-center gap-2 text-sm font-semibold cursor-pointer select-none">
+            <input
+              type="checkbox"
+              data-teams-toggle="1"
+              checked={teamsOn}
+              disabled={teamsBusy}
+              onChange={(e) => handleToggleTeams(e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            Teams mode
+          </label>
+          <span className="text-xs text-muted-foreground">
+            2 teams, score = average of teammates' guess totals.
+          </span>
+          {teamsOn && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={teamsBusy}
+              onClick={handleAutoBalance}
+              data-auto-balance="1"
+              className="rounded-full h-8 px-4 text-xs font-bold"
             >
-              <span
-                className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-black font-black"
-                style={{ background: colorForPlayer(p.player_id) }}
+              Auto-balance
+            </Button>
+          )}
+        </div>
+      )}
+
+      {teamsOn ? (
+        <section className="w-full max-w-3xl space-y-4">
+          <h2 className="text-lg font-heading font-black text-foreground/80 text-center">
+            Teams ({players.length})
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {([1, 2] as const).map((t) => (
+              <div
+                key={t}
+                data-team={t}
+                className="rounded-2xl border-2 p-4 space-y-2"
+                style={{
+                  borderColor: TEAM_META[t].color,
+                  background: TEAM_META[t].bg,
+                }}
               >
-                {p.display_name[0]?.toUpperCase()}
-              </span>
-              <span className="font-semibold truncate">{p.display_name}</span>
-              {p.is_host && (
-                <span className="ml-auto text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5">
-                  host
+                <p
+                  className="text-xs font-black uppercase tracking-widest"
+                  style={{ color: TEAM_META[t].color }}
+                >
+                  {TEAM_META[t].label} · {teamPlayers(t).length}
+                </p>
+                {teamPlayers(t).length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    No players yet.
+                  </p>
+                )}
+                <ul className="space-y-2">
+                  {teamPlayers(t).map((p) => (
+                    <li
+                      key={p.player_id}
+                      className="rounded-xl px-3 py-2 bg-card border border-border flex items-center gap-2"
+                    >
+                      <span
+                        className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-black font-black text-xs"
+                        style={{ background: colorForPlayer(p.player_id) }}
+                      >
+                        {p.display_name[0]?.toUpperCase()}
+                      </span>
+                      <span className="font-semibold truncate flex-1">
+                        {p.display_name}
+                      </span>
+                      {p.is_host && (
+                        <span className="text-[10px] bg-muted text-muted-foreground rounded-full px-2 py-0.5">
+                          host
+                        </span>
+                      )}
+                      {isHost && (
+                        <button
+                          type="button"
+                          data-swap-team="1"
+                          onClick={() =>
+                            handleSwapTeam(p.player_id, p.team ?? null)
+                          }
+                          className="text-[10px] font-bold rounded-full px-2 py-0.5 border border-border hover:bg-muted"
+                        >
+                          ⇄
+                        </button>
+                      )}
+                      {isHost && p.player_id !== currentPlayerId && (
+                        <HostControls
+                          roomId={room.id}
+                          victimId={p.player_id}
+                          victimName={p.display_name}
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          {unassignedPlayers.length > 0 && (
+            <div className="rounded-2xl border border-dashed border-border p-4 space-y-2">
+              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                Unassigned · {unassignedPlayers.length}
+              </p>
+              <ul className="flex flex-wrap gap-2">
+                {unassignedPlayers.map((p) => (
+                  <li
+                    key={p.player_id}
+                    className="rounded-full bg-muted px-3 py-1 text-sm flex items-center gap-2"
+                  >
+                    <span className="font-semibold">{p.display_name}</span>
+                    {isHost && (
+                      <button
+                        type="button"
+                        onClick={() => handleSwapTeam(p.player_id, null)}
+                        className="text-[10px] font-bold rounded-full px-2 py-0.5 border border-border hover:bg-card"
+                      >
+                        Assign
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="w-full max-w-2xl space-y-3">
+          <h2 className="text-lg font-heading font-black text-foreground/80">
+            Players ({players.length})
+          </h2>
+          <ul className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {players.map((p) => (
+              <li
+                key={p.player_id}
+                className="rounded-2xl px-4 py-3 bg-card border border-border flex items-center gap-3 shadow-sm"
+              >
+                <span
+                  className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-black font-black"
+                  style={{ background: colorForPlayer(p.player_id) }}
+                >
+                  {p.display_name[0]?.toUpperCase()}
                 </span>
-              )}
-              {isHost && p.player_id !== currentPlayerId && (
-                <HostControls
-                  roomId={room.id}
-                  victimId={p.player_id}
-                  victimName={p.display_name}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
+                <span className="font-semibold truncate">{p.display_name}</span>
+                {p.is_host && (
+                  <span className="ml-auto text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5">
+                    host
+                  </span>
+                )}
+                {isHost && p.player_id !== currentPlayerId && (
+                  <HostControls
+                    roomId={room.id}
+                    victimId={p.player_id}
+                    victimName={p.display_name}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {phase === "lobby" && (
         <div className="flex gap-3 flex-wrap justify-center">
-          {isHost && (
-            <Button
-              onClick={handleStart}
-              disabled={players.length < 2 || starting}
-              className="font-bold text-lg px-8 py-6 rounded-2xl"
-            >
-              {starting ? "Starting…" : `Start game (${players.length}/2+)`}
-            </Button>
-          )}
+          {isHost && (() => {
+            const teamsIncomplete =
+              teamsOn &&
+              (teamPlayers(1).length === 0 ||
+                teamPlayers(2).length === 0 ||
+                unassignedPlayers.length > 0);
+            const disabled = players.length < 2 || starting || teamsIncomplete;
+            const label = starting
+              ? "Starting…"
+              : teamsIncomplete
+                ? "Assign every player to a team"
+                : `Start game (${players.length}/2+)`;
+            return (
+              <Button
+                onClick={handleStart}
+                disabled={disabled}
+                className="font-bold text-lg px-8 py-6 rounded-2xl"
+              >
+                {label}
+              </Button>
+            );
+          })()}
           <Button
             onClick={() =>
               startTransition(() => {

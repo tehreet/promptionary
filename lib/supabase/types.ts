@@ -296,6 +296,7 @@ export type Database = {
           player_id: string
           room_id: string
           score: number
+          team: number | null
         }
         Insert: {
           display_name: string
@@ -306,6 +307,7 @@ export type Database = {
           player_id: string
           room_id: string
           score?: number
+          team?: number | null
         }
         Update: {
           display_name?: string
@@ -316,6 +318,7 @@ export type Database = {
           player_id?: string
           room_id?: string
           score?: number
+          team?: number | null
         }
         Relationships: [
           {
@@ -496,6 +499,7 @@ export type Database = {
       }
     }
     Functions: {
+      auto_balance_teams: { Args: { p_room_id: string }; Returns: undefined }
       count_round_guesses: { Args: { p_round_id: string }; Returns: number }
       create_room: {
         Args: {
@@ -542,6 +546,17 @@ export type Database = {
         Returns: string
       }
       realtime_topic_room: { Args: { topic: string }; Returns: string }
+      set_player_team: {
+        Args: { p_player_id: string; p_room_id: string; p_team: number }
+        Returns: undefined
+      }
+      set_room_mode: {
+        Args: {
+          p_mode: Database["public"]["Enums"]["room_mode"]
+          p_room_id: string
+        }
+        Returns: undefined
+      }
       start_round: { Args: { p_room_id: string }; Returns: string }
       submit_artist_prompt: {
         Args: { p_prompt: string; p_round_id: string }
