@@ -591,7 +591,8 @@ function GameClientInner({
   }, [competitors, isTeams]);
 
   return (
-    <main className="min-h-screen flex flex-col items-center gap-6 px-6 py-10 game-canvas">
+    <LiveCursorsOverlay>
+      <main className="min-h-screen flex flex-col items-center gap-6 px-6 py-10 game-canvas">
       <header className="w-full max-w-4xl flex items-center justify-between gap-2">
         <div>
           <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted-foreground">
@@ -763,15 +764,13 @@ function GameClientInner({
             </span>
           </div>
           {currentRound?.image_url && (
-            <LiveCursorsOverlay>
-              <div className="game-frame bg-[var(--game-paper)] p-2 inline-block">
-                <img
-                  src={currentRound.image_url}
-                  alt="Round painting"
-                  className="rounded-[10px] block max-w-full h-auto"
-                />
-              </div>
-            </LiveCursorsOverlay>
+            <div className="game-frame bg-[var(--game-paper)] p-2 inline-block">
+              <img
+                src={currentRound.image_url}
+                alt="Round painting"
+                className="rounded-[10px] block max-w-full h-auto"
+              />
+            </div>
           )}
           {isSpectator ? (
             <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
@@ -841,15 +840,13 @@ function GameClientInner({
           <ReactionsBarWrapper />
 
           {currentRound?.image_url && (
-            <LiveCursorsOverlay>
-              <div className="game-frame bg-[var(--game-paper)] p-2 inline-block">
-                <img
-                  src={currentRound.image_url}
-                  alt="Round"
-                  className="rounded-[10px] block max-w-full h-auto"
-                />
-              </div>
-            </LiveCursorsOverlay>
+            <div className="game-frame bg-[var(--game-paper)] p-2 inline-block">
+              <img
+                src={currentRound.image_url}
+                alt="Round"
+                className="rounded-[10px] block max-w-full h-auto"
+              />
+            </div>
           )}
           {currentRound?.prompt && (
             <PromptFlipboard
@@ -973,7 +970,8 @@ function GameClientInner({
         isSpectator={isSpectator}
         variant="floating"
       />
-    </main>
+      </main>
+    </LiveCursorsOverlay>
   );
 }
 
