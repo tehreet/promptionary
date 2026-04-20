@@ -1,11 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
-
-async function setName(page: Page, fieldIndex: number, name: string) {
-  const input = page.getByLabel("Your name").nth(fieldIndex);
-  await input.click();
-  await input.press("ControlOrMeta+a");
-  await input.fill(name);
-}
+import { test, expect } from "@playwright/test";
 
 test("invite link: opening /play/<code> shows a name form and joins", async ({
   browser,
@@ -15,7 +8,10 @@ test("invite link: opening /play/<code> shows a name form and joins", async ({
   const host = await hostCtx.newPage();
   await host.goto("/");
   const hostName = `Host${Date.now()}`;
-  await setName(host, 0, hostName);
+  const hostInput = host.locator("#create-name");
+  await hostInput.click();
+  await hostInput.press("ControlOrMeta+a");
+  await hostInput.fill(hostName);
   await host.getByRole("button", { name: "Create Room" }).click();
   await host.waitForURL(/\/play\/[A-Z]{4}$/, { timeout: 30_000 });
   const code = host.url().match(/\/play\/([A-Z]{4})$/)![1];

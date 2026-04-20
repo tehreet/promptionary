@@ -14,7 +14,10 @@ export async function createRoomAs(
   } = {},
 ) {
   await page.goto("/");
-  const nameInput = page.getByLabel("Your name").first();
+  // The home page has three tiles (Quick Match / Create / Join); target
+  // the Create card's name input explicitly by its id rather than by
+  // occurrence index — resilient if tile ordering changes later.
+  const nameInput = page.locator("#create-name");
   await nameInput.click();
   await nameInput.press("ControlOrMeta+a");
   await nameInput.fill(name);
@@ -67,7 +70,9 @@ export async function configureRoomFromLobby(
 
 export async function joinRoomAs(page: Page, code: string, name: string) {
   await page.goto("/");
-  const nameInput = page.getByLabel("Your name").nth(1);
+  // Target by id (Quick Match / Create / Join cards all live on the
+  // landing now — resilient to tile ordering changes).
+  const nameInput = page.locator("#join-name");
   await nameInput.click();
   await nameInput.press("ControlOrMeta+a");
   await nameInput.fill(name);
