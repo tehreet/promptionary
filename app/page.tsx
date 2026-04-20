@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CreateRoomCard } from "@/components/create-room-card";
 import { JoinRoomCard } from "@/components/join-room-card";
+import { QuickMatchCard } from "@/components/quick-match-card";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/profile";
 
@@ -33,6 +34,18 @@ export default async function Home() {
   const profile = await getCurrentProfile(supabase);
   const defaultName = profile?.display_name ?? null;
 
+  // SSR snapshot of open public lobbies for the Quick Match tile. RLS on
+  // `rooms` allows any authenticated user to SELECT, so this count reflects
+  // genuine live availability. 5-minute horizon matches the matchmaker
+  // window — no point counting a ghost lobby we'd never drop anyone into.
+  const openLobbiesSince = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const { count: openLobbiesCount } = await supabase
+    .from("rooms")
+    .select("id", { count: "exact", head: true })
+    .eq("is_public", true)
+    .eq("phase", "lobby")
+    .gte("created_at", openLobbiesSince);
+
   return (
     <main className="min-h-screen game-canvas flex flex-col items-center gap-14 px-5 py-12 sm:py-16">
       {/* Hero */}
@@ -55,8 +68,15 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* Create / Join */}
-      <section className="flex flex-col md:flex-row gap-8 w-full max-w-3xl items-stretch justify-center">
+      {/* Quick Match / Create / Join */}
+      <section
+        data-home-tiles="1"
+        className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 w-full max-w-5xl items-stretch justify-items-center"
+      >
+        <QuickMatchCard
+          defaultName={defaultName}
+          openLobbies={openLobbiesCount ?? 0}
+        />
         <CreateRoomCard defaultName={defaultName} />
         <JoinRoomCard defaultName={defaultName} />
       </section>

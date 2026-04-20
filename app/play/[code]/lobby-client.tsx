@@ -27,6 +27,7 @@ type Room = {
   reveal_seconds: number;
   round_num: number;
   blitz?: boolean;
+  is_public?: boolean;
 };
 
 type Player = {
@@ -516,8 +517,29 @@ function LobbyClientInner({
 
       <InviteCard code={room.code} />
 
-      {(mode !== "artist" && pack) || blitzOn ? (
+      {(mode !== "artist" && pack) || blitzOn || room.is_public ? (
         <div className="flex flex-wrap items-center justify-center gap-2">
+          {room.is_public && (
+            // Tells drop-in joiners this is a matchmade (Quick Match) room,
+            // not someone's private invite. Orange to match the Quick Match
+            // tile on the landing page.
+            <div
+              data-public-lobby-badge="1"
+              className="sticker inline-flex items-center gap-2"
+              style={
+                {
+                  ["--sticker-tilt" as string]: "-3deg",
+                  background: "var(--game-orange)",
+                } as React.CSSProperties
+              }
+            >
+              <span className="text-base leading-none">⚡</span>
+              <span className="text-[10px] uppercase tracking-widest opacity-70">
+                Matchmaking
+              </span>
+              <span className="font-bold">Public lobby</span>
+            </div>
+          )}
           {mode !== "artist" && pack && (
             <div
               data-pack={pack}

@@ -7,7 +7,9 @@ test("host creates a room and a second player joins it", async ({ browser }) => 
   await host.goto("/");
 
   const hostName = `Host${Date.now()}`;
-  const hostInput = host.getByLabel("Your name").first();
+  // Home page has Quick Match / Create / Join tiles; scope to the Create
+  // card by its input id rather than the fragile `.first()` ordering.
+  const hostInput = host.locator("#create-name");
   await hostInput.click();
   await hostInput.press("ControlOrMeta+a");
   await hostInput.fill(hostName);
@@ -28,7 +30,7 @@ test("host creates a room and a second player joins it", async ({ browser }) => 
   await joiner.goto("/");
 
   const joinerName = `Joiner${Date.now()}`;
-  const joinerInput = joiner.getByLabel("Your name").nth(1);
+  const joinerInput = joiner.locator("#join-name");
   await joinerInput.click();
   await joinerInput.press("ControlOrMeta+a");
   await joinerInput.fill(joinerName);
