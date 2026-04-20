@@ -228,6 +228,32 @@ Prompt: "${prompt}"`;
   return { tokens: parsed.tokens ?? [] };
 }
 
+// Generic fallback when the classifier says UNSAFE but gives us nothing usable.
+// Shown verbatim in the artist-mode rejection UI — keep it friendly and
+// actionable, not scolding. Issue #56: without this, players hit a dead
+// "rejected" wall with zero feedback and no idea how to recover.
+const MODERATION_FALLBACK_REASON =
+  "This prompt looks unsafe to us. Try something less edgy — avoid violence, NSFW, or real-person likenesses.";
+
+// Best-effort category → tailored reason. We only swap in a tailored message
+// when the classifier's first line contains exactly one of these tokens after
+// "UNSAFE" — anything messier falls back to the generic string above. Keeps
+// the parsing cheap and predictable.
+const MODERATION_CATEGORY_REASONS: Record<string, string> = {
+  VIOLENCE:
+    "This prompt reads as graphic violence. Try something less gory — cartoon slapstick is fine.",
+  SEXUAL:
+    "This prompt reads as NSFW. Keep it PG — party-game players of any age may be watching.",
+  NSFW:
+    "This prompt reads as NSFW. Keep it PG — party-game players of any age may be watching.",
+  HATE:
+    "This prompt reads as hateful. Drop slurs and attacks on groups — aim for playful and silly instead.",
+  HARASSMENT:
+    "This prompt targets a real person. Swap them for a fictional or fantastical character.",
+  SELF_HARM:
+    "This prompt touches self-harm. Please pick a different subject — something playful works best.",
+};
+
 // Lightweight safety classifier for user-written artist prompts. Uses the
 // same cheap `gemini-2.5-flash` model as the authoring pipeline. We default
 // to SAFE on any unrecognized output or parse weirdness — blocking gameplay
@@ -260,10 +286,20 @@ Prompt:
   const unsafeMatch = firstLine.match(/^unsafe\s*[:\-–—]?\s*(.*)$/i);
   if (unsafeMatch) {
     const reason = unsafeMatch[1]?.trim();
-    return {
-      safe: false,
-      reason: reason && reason.length > 0 ? reason : undefined,
-    };
+    if (reason && reason.length > 0) {
+      return { safe: false, reason };
+    }
+    // No reason given. If the raw response mentions a known category word
+    // anywhere (some models say "UNSAFE\nCATEGORY: VIOLENCE"), surface a
+    // tailored message. Otherwise fall back to the generic string — never
+    // return an empty reason, which is what issue #56 was about.
+    const upper = raw.toUpperCase();
+    for (const key of Object.keys(MODERATION_CATEGORY_REASONS)) {
+      if (upper.includes(key)) {
+        return { safe: false, reason: MODERATION_CATEGORY_REASONS[key] };
+      }
+    }
+    return { safe: false, reason: MODERATION_FALLBACK_REASON };
   }
   // Unrecognized shape — fail open so Gemini hiccups don't block real players.
   return { safe: true };
