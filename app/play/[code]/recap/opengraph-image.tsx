@@ -1,8 +1,10 @@
 import { ImageResponse } from "next/og";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
-// 1200x630 unfurl card for the full-game recap. Shows the winner + round
-// count. Mirrors the sticker aesthetic from /r/[round_id]/opengraph-image.
+export const runtime = "nodejs";
+// 1200x630 unfurl card for the full-game recap. Tilted "RECAP" sticker
+// header, winner name + medal, round count. Shares the Jackbox sticker
+// aesthetic with /r/[round_id]/opengraph-image and the landing card.
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "Promptionary game recap";
@@ -58,13 +60,14 @@ export default async function Image({
   const { code } = await params;
   const data = await loadRecap(code.toUpperCase());
 
-  // Mirrors --game-canvas-yellow / --game-ink / --game-pink / --game-cyan.
-  // ImageResponse can't resolve CSS vars — keep in sync with globals.css.
+  // Hex mirrors the design tokens in app/globals.css. ImageResponse can't
+  // resolve CSS vars — keep these in sync when tokens change.
   const ink = "#1e1b4d";
   const pink = "#ff5eb4";
   const cyan = "#3ddce0";
   const yellow = "#ffe15e";
   const cream = "#fff7d6";
+  const orange = "#ff8b3d";
 
   if (!data) {
     return new ImageResponse(
@@ -92,9 +95,13 @@ export default async function Image({
   }
 
   const { room, winner, roundCount, firstImage } = data;
-  const winnerLine = winner
-    ? `${truncate(winner.display_name, 24)} · ${winner.score}`
-    : "No winner yet";
+  const winnerName = winner ? truncate(winner.display_name, 22) : "No winner";
+  const winnerScore = winner ? winner.score : 0;
+
+  // "RECAP" as individual sticker tiles.
+  const recapLetters = "RECAP".split("");
+  const recapTilts = [-5, 3, -2, 4, -3];
+  const recapBgs = [pink, cyan, orange, cream, pink];
 
   return new ImageResponse(
     (
@@ -111,14 +118,15 @@ export default async function Image({
           backgroundColor: yellow,
         }}
       >
+        {/* Off-canvas decorative sticker blobs. */}
         <div
           style={{
             position: "absolute",
             left: -90,
             top: -90,
-            width: 360,
-            height: 360,
-            borderRadius: 180,
+            width: 300,
+            height: 300,
+            borderRadius: 150,
             background: pink,
             border: `6px solid ${ink}`,
           }}
@@ -126,105 +134,180 @@ export default async function Image({
         <div
           style={{
             position: "absolute",
-            left: 150,
-            top: -60,
-            width: 220,
-            height: 220,
-            borderRadius: 110,
+            left: -60,
+            bottom: -110,
+            width: 260,
+            height: 260,
+            borderRadius: 130,
             background: cyan,
             border: `6px solid ${ink}`,
           }}
         />
 
+        {/* Left column: RECAP header, winner sticker, round count. */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            padding: "48px 60px",
-            gap: 20,
+            padding: "52px 60px",
+            gap: 28,
             flex: 1,
             zIndex: 1,
-            maxWidth: 720,
+            maxWidth: 760,
           }}
         >
+          {/* Tilted RECAP wordmark. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {recapLetters.map((ch, i) => (
+              <div
+                key={`${ch}-${i}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 88,
+                  height: 110,
+                  background: recapBgs[i % recapBgs.length],
+                  color: ink,
+                  border: `6px solid ${ink}`,
+                  borderRadius: 16,
+                  fontSize: 82,
+                  fontWeight: 900,
+                  letterSpacing: "-0.05em",
+                  transform: `rotate(${recapTilts[i % recapTilts.length]}deg)`,
+                  boxShadow: `5px 5px 0 ${ink}`,
+                }}
+              >
+                {ch}
+              </div>
+            ))}
+          </div>
+
+          {/* Winner card — medal + name + score. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "18px 22px 18px 18px",
+              background: cream,
+              border: `5px solid ${ink}`,
+              borderRadius: 20,
+              boxShadow: `8px 8px 0 ${ink}`,
+              gap: 20,
+            }}
+          >
+            {/* Medal */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 92,
+                height: 92,
+                borderRadius: 46,
+                background: yellow,
+                border: `5px solid ${ink}`,
+                fontSize: 62,
+                flexShrink: 0,
+              }}
+            >
+              🥇
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 20,
+                  fontWeight: 900,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: ink,
+                  opacity: 0.75,
+                }}
+              >
+                Champ
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 54,
+                  fontWeight: 900,
+                  letterSpacing: "-0.03em",
+                  lineHeight: 1.0,
+                }}
+              >
+                {winnerName}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 30,
+                  fontWeight: 800,
+                  color: ink,
+                  opacity: 0.85,
+                  marginTop: 4,
+                }}
+              >
+                {winnerScore} pts
+              </div>
+            </div>
+          </div>
+
+          {/* Round count sticker chip + room code. */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               gap: 14,
-              fontSize: 22,
-              letterSpacing: "0.3em",
-              textTransform: "uppercase",
-              fontWeight: 800,
-              opacity: 0.9,
             }}
           >
-            <span
+            <div
               style={{
                 display: "flex",
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 10,
-                background: pink,
-                border: `3px solid ${ink}`,
-                color: cream,
-                fontSize: 28,
-                fontWeight: 900,
-                letterSpacing: "-0.05em",
-              }}
-            >
-              P
-            </span>
-            <span>Room {room.code} recap</span>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              fontSize: 64,
-              fontWeight: 900,
-              letterSpacing: "-0.04em",
-              lineHeight: 1.0,
-            }}
-          >
-            {roundCount} round{roundCount === 1 ? "" : "s"}. One winner.
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              padding: "22px 26px",
-              background: cream,
-              border: `5px solid ${ink}`,
-              borderRadius: 18,
-              fontSize: 40,
-              fontWeight: 800,
-              lineHeight: 1.2,
-              boxShadow: `8px 8px 0 ${ink}`,
-              alignItems: "center",
-              gap: 16,
-            }}
-          >
-            <span
-              style={{
-                display: "flex",
-                padding: "6px 14px",
+                padding: "10px 20px",
                 borderRadius: 9999,
                 background: pink,
                 color: cream,
-                border: `3px solid ${ink}`,
-                fontSize: 22,
+                border: `4px solid ${ink}`,
+                fontSize: 26,
                 fontWeight: 900,
                 textTransform: "uppercase",
                 letterSpacing: "0.15em",
+                transform: "rotate(-2deg)",
               }}
             >
-              Champ
-            </span>
-            <span style={{ display: "flex" }}>{winnerLine}</span>
+              {roundCount} round{roundCount === 1 ? "" : "s"}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                padding: "10px 20px",
+                borderRadius: 9999,
+                background: cyan,
+                color: ink,
+                border: `4px solid ${ink}`,
+                fontSize: 26,
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: "0.15em",
+                transform: "rotate(2deg)",
+              }}
+            >
+              Room {room.code}
+            </div>
           </div>
 
           <div
@@ -232,16 +315,17 @@ export default async function Image({
               display: "flex",
               marginTop: "auto",
               paddingTop: 10,
-              fontSize: 22,
-              fontWeight: 700,
+              fontSize: 24,
+              fontWeight: 900,
               letterSpacing: "0.05em",
-              opacity: 0.85,
+              color: ink,
             }}
           >
             promptionary.io
           </div>
         </div>
 
+        {/* Right column: first round image as tilted sticker, or cyan fallback. */}
         {firstImage ? (
           <div
             style={{
@@ -261,7 +345,7 @@ export default async function Image({
                 border: `6px solid ${ink}`,
                 borderRadius: 22,
                 boxShadow: `12px 12px 0 ${ink}`,
-                transform: "rotate(2deg)",
+                transform: "rotate(3deg)",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -284,10 +368,10 @@ export default async function Image({
           <div
             style={{
               display: "flex",
-              width: 440,
+              width: 480,
               alignItems: "center",
               justifyContent: "center",
-              padding: "48px 40px",
+              padding: "48px 40px 48px 0",
               zIndex: 1,
             }}
           >
@@ -296,16 +380,18 @@ export default async function Image({
                 display: "flex",
                 width: 360,
                 height: 360,
-                borderRadius: 180,
+                borderRadius: 32,
                 background: cyan,
                 border: `6px solid ${ink}`,
                 alignItems: "center",
                 justifyContent: "center",
                 fontSize: 200,
                 fontWeight: 900,
+                transform: "rotate(3deg)",
+                boxShadow: `10px 10px 0 ${ink}`,
               }}
             >
-              ?
+              🏆
             </div>
           </div>
         )}

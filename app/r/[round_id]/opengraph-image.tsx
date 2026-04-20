@@ -1,9 +1,10 @@
 import { ImageResponse } from "next/og";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
-// 1200x630 unfurl card. Vibrant, anti-slop — same sticker palette as the
-// landing card but flipped so the round image is the hero. Discord / iMessage
-// / Twitter all happily consume this.
+export const runtime = "nodejs";
+// 1200x630 unfurl card for a single round recap. Jackbox sticker aesthetic —
+// the round image is the hero (tilted sticker on the right), with the prompt
+// in a chunky paper card on the left and an optional top-guess callout.
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "Promptionary round recap";
@@ -73,14 +74,14 @@ export default async function Image({
   const { round_id } = await params;
   const data = await loadRound(round_id);
 
-  // Mirrors --game-canvas-yellow / --game-ink / --game-pink / --game-cyan.
-  // Update here if the tokens in globals.css ever change — ImageResponse
-  // cannot resolve CSS vars.
+  // Hex mirrors the design tokens in app/globals.css. ImageResponse can't
+  // resolve CSS vars — keep these in sync when tokens change.
   const ink = "#1e1b4d";
   const pink = "#ff5eb4";
   const cyan = "#3ddce0";
   const yellow = "#ffe15e";
   const cream = "#fff7d6";
+  const orange = "#ff8b3d";
 
   if (!data) {
     return new ImageResponse(
@@ -110,8 +111,13 @@ export default async function Image({
   const { round, topGuess, topPlayer } = data;
   const prompt = round.prompt ? truncate(round.prompt, 140) : "Guess the prompt";
   const topText = topGuess
-    ? `"${truncate(topGuess.guess, 60)}" — ${topPlayer ?? "Player"} · +${topGuess.total_score ?? 0}`
+    ? `"${truncate(topGuess.guess, 48)}" — ${topPlayer ?? "Player"} · +${topGuess.total_score ?? 0}`
     : null;
+
+  // "GUESS" as individual sticker tiles — the hero line.
+  const guessLetters = "GUESS".split("");
+  const guessTilts = [-4, 3, -3, 4, -2];
+  const guessBgs = [pink, cyan, orange, pink, cyan];
 
   return new ImageResponse(
     (
@@ -128,15 +134,15 @@ export default async function Image({
           backgroundColor: yellow,
         }}
       >
-        {/* Sticker blobs in the top-left so they don't fight the image. */}
+        {/* Decorative sticker blobs, tucked out of the way of the image. */}
         <div
           style={{
             position: "absolute",
             left: -90,
             top: -90,
-            width: 360,
-            height: 360,
-            borderRadius: 180,
+            width: 300,
+            height: 300,
+            borderRadius: 150,
             background: pink,
             border: `6px solid ${ink}`,
           }}
@@ -144,75 +150,78 @@ export default async function Image({
         <div
           style={{
             position: "absolute",
-            left: 150,
-            top: -60,
-            width: 220,
-            height: 220,
-            borderRadius: 110,
+            left: -60,
+            bottom: -100,
+            width: 240,
+            height: 240,
+            borderRadius: 120,
             background: cyan,
             border: `6px solid ${ink}`,
           }}
         />
 
-        {/* Left column: brand + prompt */}
+        {/* Left column: GUESS header + prompt + top guess. */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            padding: "48px 60px",
-            gap: 20,
+            padding: "44px 56px",
+            gap: 22,
             flex: 1,
             zIndex: 1,
             maxWidth: 720,
           }}
         >
+          {/* Tilted GUESS wordmark. */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 14,
-              fontSize: 22,
-              letterSpacing: "0.3em",
-              textTransform: "uppercase",
-              fontWeight: 800,
-              opacity: 0.9,
+              gap: 5,
             }}
           >
-            <span
-              style={{
-                display: "flex",
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 10,
-                background: pink,
-                border: `3px solid ${ink}`,
-                color: cream,
-                fontSize: 28,
-                fontWeight: 900,
-                letterSpacing: "-0.05em",
-              }}
-            >
-              P
-            </span>
-            <span>Round recap</span>
+            {guessLetters.map((ch, i) => (
+              <div
+                key={`${ch}-${i}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 76,
+                  height: 94,
+                  background: guessBgs[i % guessBgs.length],
+                  color: ink,
+                  border: `5px solid ${ink}`,
+                  borderRadius: 14,
+                  fontSize: 72,
+                  fontWeight: 900,
+                  letterSpacing: "-0.05em",
+                  transform: `rotate(${guessTilts[i % guessTilts.length]}deg)`,
+                  boxShadow: `5px 5px 0 ${ink}`,
+                }}
+              >
+                {ch}
+              </div>
+            ))}
           </div>
 
+          {/* "THE PROMPT" label. */}
           <div
             style={{
               display: "flex",
-              fontSize: 44,
+              fontSize: 22,
               fontWeight: 900,
-              letterSpacing: "-0.04em",
-              lineHeight: 1.0,
-              opacity: 0.9,
+              letterSpacing: "0.25em",
+              textTransform: "uppercase",
+              color: ink,
+              opacity: 0.75,
             }}
           >
-            Guess the prompt.
+            The prompt was
           </div>
 
+          {/* Prompt paper card. */}
           <div
             style={{
               display: "flex",
@@ -222,7 +231,7 @@ export default async function Image({
               borderRadius: 18,
               fontSize: 38,
               fontWeight: 800,
-              lineHeight: 1.25,
+              lineHeight: 1.2,
               boxShadow: `8px 8px 0 ${ink}`,
             }}
           >
@@ -234,17 +243,16 @@ export default async function Image({
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
-                fontSize: 24,
-                fontWeight: 700,
+                gap: 12,
+                fontSize: 22,
+                fontWeight: 800,
                 color: ink,
-                opacity: 0.95,
               }}
             >
               <span
                 style={{
                   display: "flex",
-                  padding: "6px 14px",
+                  padding: "7px 16px",
                   borderRadius: 9999,
                   background: pink,
                   color: cream,
@@ -253,6 +261,7 @@ export default async function Image({
                   fontWeight: 900,
                   textTransform: "uppercase",
                   letterSpacing: "0.15em",
+                  transform: "rotate(-2deg)",
                 }}
               >
                 Top guess
@@ -265,18 +274,18 @@ export default async function Image({
             style={{
               display: "flex",
               marginTop: "auto",
-              paddingTop: 10,
+              paddingTop: 8,
               fontSize: 22,
-              fontWeight: 700,
+              fontWeight: 900,
               letterSpacing: "0.05em",
-              opacity: 0.85,
+              color: ink,
             }}
           >
             promptionary.io
           </div>
         </div>
 
-        {/* Right column: round image if present, styled as a sticker */}
+        {/* Right column: round image as tilted sticker. */}
         {round.image_url ? (
           <div
             style={{
@@ -296,7 +305,7 @@ export default async function Image({
                 border: `6px solid ${ink}`,
                 borderRadius: 22,
                 boxShadow: `12px 12px 0 ${ink}`,
-                transform: "rotate(2deg)",
+                transform: "rotate(3deg)",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -319,10 +328,10 @@ export default async function Image({
           <div
             style={{
               display: "flex",
-              width: 440,
+              width: 480,
               alignItems: "center",
               justifyContent: "center",
-              padding: "48px 40px",
+              padding: "48px 40px 48px 0",
               zIndex: 1,
             }}
           >
@@ -331,13 +340,15 @@ export default async function Image({
                 display: "flex",
                 width: 360,
                 height: 360,
-                borderRadius: 180,
+                borderRadius: 32,
                 background: cyan,
                 border: `6px solid ${ink}`,
                 alignItems: "center",
                 justifyContent: "center",
                 fontSize: 200,
                 fontWeight: 900,
+                transform: "rotate(3deg)",
+                boxShadow: `10px 10px 0 ${ink}`,
               }}
             >
               ?
