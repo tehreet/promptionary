@@ -135,9 +135,19 @@ function HighlightCard({
       )}
 
       {highlight.prompt && (
+        // Always-cream paper card. Token text must stay dark in both themes —
+        // var(--game-ink) flips to cream in dark mode and vanishes on the
+        // locked-cream background (see #70). --game-canvas-dark stays dark
+        // in both themes.
         <div
           data-highlight-prompt="1"
-          className="rounded-xl bg-[var(--game-cream)] border-2 border-[var(--game-ink)] px-3 py-2 text-[13px] leading-snug"
+          className="rounded-xl bg-[var(--game-cream)] px-3 py-2 text-[13px] leading-snug"
+          style={{
+            color: "var(--game-canvas-dark)",
+            borderWidth: 2,
+            borderStyle: "solid",
+            borderColor: "var(--game-canvas-dark)",
+          }}
         >
           {tokens.length > 0 ? (
             <span>

@@ -644,9 +644,23 @@ function LobbyClientInner({
                   onClick={() => handleSetMode(m)}
                   className="rounded-xl px-3 py-2 border-2 text-left transition"
                   style={
+                    // Pin both states to theme-locked colors so the tile stays
+                    // readable in both light and dark. var(--game-ink) flips to
+                    // cream in dark mode (see #64); use --game-canvas-dark (dark
+                    // in both themes) for the dark surface and --game-canvas-yellow
+                    // for the light ink on that surface. Unselected = cream
+                    // paper card with dark ink text (also theme-locked).
                     mode === m
-                      ? { background: "var(--game-ink)", color: "var(--game-canvas-yellow)", borderColor: "var(--game-ink)" }
-                      : { background: "var(--game-paper)", color: "var(--game-ink)", borderColor: "var(--game-ink)" }
+                      ? {
+                          background: "var(--game-canvas-dark)",
+                          color: "var(--game-canvas-yellow)",
+                          borderColor: "var(--game-canvas-dark)",
+                        }
+                      : {
+                          background: "var(--game-cream)",
+                          color: "var(--game-canvas-dark)",
+                          borderColor: "var(--game-canvas-dark)",
+                        }
                   }
                 >
                   <p className="text-sm font-black">
@@ -684,9 +698,21 @@ function LobbyClientInner({
                       title={meta.blurb}
                       className="rounded-full px-3 py-1.5 text-xs font-black border-2 transition"
                       style={
+                        // Same theme-lock as the Mode tiles — var(--game-ink)
+                        // flips to cream in dark mode and the pill becomes
+                        // cream-on-cream (#64). Use --game-canvas-dark / yellow
+                        // for the active pill; cream paper + dark ink for idle.
                         active
-                          ? { background: "var(--game-ink)", color: "var(--game-canvas-yellow)", borderColor: "var(--game-ink)" }
-                          : { background: "var(--game-paper)", color: "var(--game-ink)", borderColor: "var(--game-ink)" }
+                          ? {
+                              background: "var(--game-canvas-dark)",
+                              color: "var(--game-canvas-yellow)",
+                              borderColor: "var(--game-canvas-dark)",
+                            }
+                          : {
+                              background: "var(--game-cream)",
+                              color: "var(--game-canvas-dark)",
+                              borderColor: "var(--game-canvas-dark)",
+                            }
                       }
                     >
                       <span className="mr-1">{meta.emoji}</span>
@@ -1249,8 +1275,12 @@ function SettingField({
         }}
         className="w-full bg-white border-2 rounded-lg h-10 px-2 text-sm"
         style={{
-          borderColor: "var(--game-ink)",
-          color: "var(--game-ink)",
+          // Input bg is hardcoded white (a fixed-light surface). Text + border
+          // must stay dark in both themes — var(--game-ink) flips to cream in
+          // dark mode and vanishes on white (#64). --game-canvas-dark stays
+          // dark in both themes.
+          borderColor: "var(--game-canvas-dark)",
+          color: "var(--game-canvas-dark)",
         }}
       />
     </div>
