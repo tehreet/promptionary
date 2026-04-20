@@ -5,6 +5,12 @@ import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import type { PromptToken, TokenRole } from "@/components/prompt-flipboard";
 import { chipColorsForPlayer } from "@/lib/player";
 import { CopyRecapLink } from "./copy-recap-link";
+import {
+  HighlightsSection,
+  type BiggestSwingPick,
+  type ClosestGuessPick,
+  type MostActivePick,
+} from "./highlights-section";
 
 // Full-game recap page. Public — any link-holder can see the final standings
 // plus every round's prompt + image + top guesses. Service role bypasses RLS
@@ -29,6 +35,7 @@ type RoundRow = {
   prompt: string | null;
   image_url: string | null;
   artist_player_id: string | null;
+  started_at: string;
   ended_at: string | null;
 };
 
@@ -80,7 +87,7 @@ async function fetchRecap(code: string) {
     svc
       .from("rounds")
       .select(
-        "id, room_id, round_num, prompt, image_url, artist_player_id, ended_at",
+        "id, room_id, round_num, prompt, image_url, artist_player_id, started_at, ended_at",
       )
       .eq("room_id", room.id)
       .not("ended_at", "is", null)
@@ -96,23 +103,36 @@ async function fetchRecap(code: string) {
 
   const roundIds = roundRows.map((r) => r.id);
 
-  const [{ data: guesses }, { data: tokens }] = roundIds.length
-    ? await Promise.all([
-        svc
-          .from("guesses")
-          .select("id, round_id, player_id, guess, total_score")
-          .in("round_id", roundIds)
-          .order("total_score", { ascending: false, nullsFirst: false }),
-        svc
-          .from("round_prompt_tokens")
-          .select("round_id, position, token, role")
-          .in("round_id", roundIds)
-          .order("position", { ascending: true }),
-      ])
-    : [{ data: [] as GuessRow[] }, { data: [] as TokenRow[] }];
+  const [{ data: guesses }, { data: tokens }, { data: messages }] =
+    roundIds.length
+      ? await Promise.all([
+          svc
+            .from("guesses")
+            .select("id, round_id, player_id, guess, total_score")
+            .in("round_id", roundIds)
+            .order("total_score", { ascending: false, nullsFirst: false }),
+          svc
+            .from("round_prompt_tokens")
+            .select("round_id, position, token, role")
+            .in("round_id", roundIds)
+            .order("position", { ascending: true }),
+          // room_messages is keyed by room_id only (no round_id column), so
+          // we fetch timestamps for the room and bucket them into rounds on
+          // the server via each round's [started_at, ended_at] window.
+          svc
+            .from("room_messages")
+            .select("created_at")
+            .eq("room_id", room.id),
+        ])
+      : [
+          { data: [] as GuessRow[] },
+          { data: [] as TokenRow[] },
+          { data: [] as { created_at: string }[] },
+        ];
 
   const guessRows = (guesses ?? []) as GuessRow[];
   const tokenRows = (tokens ?? []) as TokenRow[];
+  const messageRows = (messages ?? []) as { created_at: string }[];
 
   const guessesByRound = new Map<string, GuessRow[]>();
   for (const g of guessRows) {
@@ -131,6 +151,13 @@ async function fetchRecap(code: string) {
   const playerMap = new Map<string, PlayerRow>();
   for (const p of playerRows) playerMap.set(p.player_id, p);
 
+  const highlights = computeHighlights({
+    rounds: roundRows,
+    guessRows,
+    messages: messageRows,
+    playerMap,
+  });
+
   return {
     room,
     done: true as const,
@@ -139,7 +166,165 @@ async function fetchRecap(code: string) {
     playerMap,
     guessesByRound,
     tokensByRound,
+    highlights,
   };
+}
+
+// Curate the three highlight buckets from existing data. Pure-JS, runs on the
+// server next to the fetch so the page remains a single await. Each bucket is
+// independently `null` when there's not enough signal (no guesses scored, no
+// chat, etc.) — the UI collapses to "—" instead of faking numbers.
+function computeHighlights({
+  rounds,
+  guessRows,
+  messages,
+  playerMap,
+}: {
+  rounds: RoundRow[];
+  guessRows: GuessRow[];
+  messages: { created_at: string }[];
+  playerMap: Map<string, PlayerRow>;
+}): {
+  closest: ClosestGuessPick | null;
+  swing: BiggestSwingPick | null;
+  active: MostActivePick | null;
+} {
+  const roundById = new Map<string, RoundRow>();
+  for (const r of rounds) roundById.set(r.id, r);
+
+  // 1. Closest guess — highest total_score across the whole game. `guessRows`
+  //    is already sorted total_score DESC from the fetch, so first non-null
+  //    wins. We require total_score > 0 so a game where nobody scored shows
+  //    "—" rather than an arbitrary zero pick.
+  let closest: ClosestGuessPick | null = null;
+  for (const g of guessRows) {
+    const score = g.total_score ?? 0;
+    if (score <= 0) continue;
+    const round = roundById.get(g.round_id);
+    if (!round) continue;
+    const p = playerMap.get(g.player_id) ?? null;
+    closest = {
+      guess: {
+        round_id: g.round_id,
+        player_id: g.player_id,
+        guess: g.guess,
+        total_score: g.total_score,
+      },
+      round: {
+        id: round.id,
+        round_num: round.round_num,
+        prompt: round.prompt,
+        image_url: round.image_url,
+      },
+      player: p
+        ? { player_id: p.player_id, display_name: p.display_name }
+        : null,
+    };
+    break;
+  }
+
+  // 2. Biggest swing — the (round, player) pair with the largest positive
+  //    delta vs that round's average guesser total. Artist-mode rounds still
+  //    compute fine; the artist isn't in `guesses`, so they don't distort
+  //    the average or compete for the pick.
+  let swing: BiggestSwingPick | null = null;
+  const guessesPerRound = new Map<string, GuessRow[]>();
+  for (const g of guessRows) {
+    const arr = guessesPerRound.get(g.round_id) ?? [];
+    arr.push(g);
+    guessesPerRound.set(g.round_id, arr);
+  }
+  for (const [roundId, gs] of guessesPerRound) {
+    if (gs.length < 2) continue; // a 1-guess round has no meaningful swing
+    const totals = gs.map((g) => g.total_score ?? 0);
+    const sum = totals.reduce((a, b) => a + b, 0);
+    const avg = Math.round(sum / totals.length);
+    let best: GuessRow | null = null;
+    let bestScore = -Infinity;
+    for (const g of gs) {
+      const s = g.total_score ?? 0;
+      if (s > bestScore) {
+        bestScore = s;
+        best = g;
+      }
+    }
+    if (!best) continue;
+    const delta = bestScore - avg;
+    if (delta <= 0) continue;
+    if (!swing || delta > swing.delta) {
+      const round = roundById.get(roundId);
+      if (!round) continue;
+      const p = playerMap.get(best.player_id) ?? null;
+      swing = {
+        round: {
+          id: round.id,
+          round_num: round.round_num,
+          prompt: round.prompt,
+          image_url: round.image_url,
+        },
+        player: p
+          ? { player_id: p.player_id, display_name: p.display_name }
+          : null,
+        score: bestScore,
+        average: avg,
+        delta,
+      };
+    }
+  }
+
+  // 3. Most active round — message count per round, bucketed by timestamp.
+  //    `room_messages` has no `round_id`, so we walk rounds (sorted by
+  //    round_num asc, as fetched) and count messages whose created_at falls
+  //    inside [started_at, ended_at]. Messages that predate round 1 or post-
+  //    date the final round are simply ignored — they're lobby/game-over
+  //    chatter, not round-specific.
+  let active: MostActivePick | null = null;
+  if (messages.length && rounds.length) {
+    const counts = new Map<string, number>();
+    const sorted = rounds
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(a.started_at).getTime() - new Date(b.started_at).getTime(),
+      );
+    for (const m of messages) {
+      const ts = new Date(m.created_at).getTime();
+      for (const r of sorted) {
+        const start = new Date(r.started_at).getTime();
+        const end = r.ended_at
+          ? new Date(r.ended_at).getTime()
+          : Number.POSITIVE_INFINITY;
+        if (ts >= start && ts <= end) {
+          counts.set(r.id, (counts.get(r.id) ?? 0) + 1);
+          break;
+        }
+      }
+    }
+    let bestId: string | null = null;
+    let bestCount = 0;
+    for (const [id, c] of counts) {
+      if (c > bestCount) {
+        bestCount = c;
+        bestId = id;
+      }
+    }
+    if (bestId && bestCount > 0) {
+      const round = roundById.get(bestId);
+      if (round) {
+        active = {
+          round: {
+            id: round.id,
+            round_num: round.round_num,
+            prompt: round.prompt,
+            image_url: round.image_url,
+          },
+          messageCount: bestCount,
+        };
+      }
+    }
+  }
+
+  return { closest, swing, active };
 }
 
 function truncate(str: string, max: number) {
@@ -386,8 +571,15 @@ export default async function RecapPage({
     );
   }
 
-  const { room, rounds, players, playerMap, guessesByRound, tokensByRound } =
-    data;
+  const {
+    room,
+    rounds,
+    players,
+    playerMap,
+    guessesByRound,
+    tokensByRound,
+    highlights,
+  } = data;
 
   // Split guessers from spectators for the leaderboard (spectators sit at 0
   // and would otherwise muddy the ranks).
@@ -567,6 +759,12 @@ export default async function RecapPage({
           </p>
         )}
       </section>
+
+      <HighlightsSection
+        closest={highlights.closest}
+        swing={highlights.swing}
+        active={highlights.active}
+      />
 
       <section className="w-full max-w-3xl flex flex-col gap-4">
         <div className="flex items-baseline justify-between px-1">
