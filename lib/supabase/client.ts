@@ -14,6 +14,10 @@ function getProjectRef(): string {
   return url.replace(/^https?:\/\//, "").split(".")[0];
 }
 
+export function readAuthAccessToken(): string | null {
+  return readAuthCookie()?.access_token ?? null;
+}
+
 function readAuthCookie(): { access_token?: string; refresh_token?: string } | null {
   if (typeof document === "undefined") return null;
   const parts = document.cookie.split(";");

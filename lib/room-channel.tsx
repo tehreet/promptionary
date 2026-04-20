@@ -10,7 +10,10 @@ import {
   type ReactNode,
 } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  createSupabaseBrowserClient,
+  readAuthAccessToken,
+} from "@/lib/supabase/client";
 
 type RoomChannelValue = {
   channel: RealtimeChannel | null;
@@ -19,6 +22,12 @@ type RoomChannelValue = {
 };
 
 const Ctx = createContext<RoomChannelValue | null>(null);
+
+// Re-auth the realtime socket before the 1h Supabase JWT expires. The browser
+// client bridges the cookie token via realtime.setAuth() exactly once at
+// construction; without this loop the socket silently loses auth and
+// broadcasts (cursors / reactions / chat) stop crossing tabs. See #81.
+const REFRESH_INTERVAL_MS = 25 * 60 * 1000;
 
 export function RoomChannelProvider({
   roomId,
@@ -43,8 +52,61 @@ export function RoomChannelProvider({
     ch.subscribe((status) => {
       if (status === "SUBSCRIBED") setChannel(ch);
     });
+
+    let lastToken = readAuthAccessToken();
+    const refresh = async () => {
+      try {
+        // Ping through middleware so the SSR helper rotates the cookie when
+        // the access token is near expiry. Then re-read the cookie and push
+        // the fresh token to the open socket.
+        await fetch("/api/keepalive", {
+          credentials: "include",
+          cache: "no-store",
+        });
+      } catch {
+        // Network blips are non-fatal; fall through to setAuth with whatever
+        // the cookie currently holds.
+      }
+      const token = readAuthAccessToken();
+      if (token && token !== lastToken) {
+        supabase.realtime.setAuth(token);
+        lastToken = token;
+      }
+      if (typeof window !== "undefined") {
+        (window as unknown as { __realtimeLastAuthToken?: string | null })
+          .__realtimeLastAuthToken = token;
+      }
+    };
+
+    const interval = setInterval(refresh, REFRESH_INTERVAL_MS);
+    const onVisibility = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void refresh();
+      }
+    };
+    const onFocus = () => {
+      void refresh();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", onFocus);
+      (window as unknown as { __realtimeRefresh?: () => Promise<void> })
+        .__realtimeRefresh = refresh;
+    }
+
     return () => {
       setChannel(null);
+      clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", onFocus);
+        delete (window as unknown as { __realtimeRefresh?: () => Promise<void> })
+          .__realtimeRefresh;
+      }
       supabase.removeChannel(ch);
     };
   }, [roomId]);
