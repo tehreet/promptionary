@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
+import { serverEnv } from "@/lib/env";
 import { generateImagePng, moderatePrompt, tagPromptRoles } from "@/lib/gemini";
 
 export const runtime = "nodejs";
@@ -50,7 +52,15 @@ export async function POST(req: Request) {
     );
   }
 
-  const userSupabase = await createSupabaseServerClient();
+  // Stress-test bots pass a Bearer token; browsers use cookies.
+  const authHeader = req.headers.get("authorization") ?? "";
+  const userSupabase = authHeader.toLowerCase().startsWith("bearer ")
+    ? createClient(
+        serverEnv!.NEXT_PUBLIC_SUPABASE_URL,
+        serverEnv!.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        { global: { headers: { Authorization: authHeader } } },
+      )
+    : await createSupabaseServerClient();
   const {
     data: { user },
   } = await userSupabase.auth.getUser();
