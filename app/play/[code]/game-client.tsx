@@ -20,6 +20,7 @@ import {
   playWinnerCheer,
 } from "@/lib/sfx";
 import { PromptFlipboard, type PromptToken } from "@/components/prompt-flipboard";
+import { pickExamplePrompt } from "@/lib/example-prompts";
 import { HostControls } from "@/components/host-controls";
 import { LoadingPhrases } from "@/components/loading-phrases";
 import {
@@ -1917,7 +1918,7 @@ function ArtistPromptingView({
                   if (prompt.trim().length >= 4) submit();
                 }
               }}
-              placeholder="A raccoon delivering mail by bicycle in a watercolor cityscape at dusk..."
+              placeholder={pickExamplePrompt(currentRound?.id ?? "")}
               maxLength={240}
               rows={4}
               autoFocus
