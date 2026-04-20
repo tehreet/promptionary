@@ -8,8 +8,8 @@ type Cursor = {
   id: string;
   name: string;
   color: string;
-  x: number; // 0..1 relative to container
-  y: number;
+  x: number; // viewport pixels (clientX)
+  y: number; // viewport pixels (clientY)
   updatedAt: number;
 };
 
@@ -20,7 +20,6 @@ const STALE_MS = 2500;
 
 export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
   const { channel, player } = useRoomChannel();
-  const containerRef = useRef<HTMLDivElement>(null);
   const [cursors, setCursors] = useState<Record<string, Cursor>>({});
   const lastSentRef = useRef(0);
   const pendingRef = useRef<{ x: number; y: number } | null>(null);
@@ -74,10 +73,12 @@ export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, []);
 
-  // Pointer tracking + throttled broadcast
+  // Pointer tracking + throttled broadcast — window-scoped so cursors
+  // follow the user across the entire viewport (header, chat, sidebar,
+  // scoreboard), not just the content column.
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !channel) return;
+    if (!channel) return;
+    if (typeof window === "undefined") return;
 
     const send = (x: number, y: number) => {
       channel.send({
@@ -88,9 +89,9 @@ export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
     };
 
     const onMove = (e: PointerEvent) => {
-      const rect = el.getBoundingClientRect();
-      const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+      // Raw viewport coordinates — receiver renders at the same left/top.
+      const x = e.clientX;
+      const y = e.clientY;
       pendingRef.current = { x, y };
       const now = Date.now();
       if (now - lastSentRef.current > SEND_INTERVAL_MS) {
@@ -107,8 +108,11 @@ export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
       });
     };
 
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerleave", onLeave);
+    window.addEventListener("pointermove", onMove);
+    // pointerleave on window fires when the pointer leaves the viewport.
+    window.addEventListener("pointerleave", onLeave);
+    // blur also suggests the user is no longer pointing at this page.
+    window.addEventListener("blur", onLeave);
 
     // Flush any pending throttled update
     const flush = setInterval(() => {
@@ -119,8 +123,9 @@ export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
     }, SEND_INTERVAL_MS);
 
     return () => {
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("blur", onLeave);
       clearInterval(flush);
       channel.send({
         type: "broadcast",
@@ -131,14 +136,14 @@ export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
   }, [channel, player.id, player.name, player.color]);
 
   return (
-    <div ref={containerRef} className="relative">
+    <>
       {children}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden z-50">
         {Object.values(cursors).map((c) => (
           <RemoteCursor key={c.id} cursor={c} />
         ))}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -147,8 +152,8 @@ function RemoteCursor({ cursor }: { cursor: Cursor }) {
     <div
       className="absolute transition-[left,top] duration-[50ms] ease-linear"
       style={{
-        left: `${cursor.x * 100}%`,
-        top: `${cursor.y * 100}%`,
+        left: `${cursor.x}px`,
+        top: `${cursor.y}px`,
         transform: "translate(-4px, -2px)",
       }}
     >
