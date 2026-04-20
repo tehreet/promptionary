@@ -23,6 +23,7 @@ import { PromptFlipboard, type PromptToken } from "@/components/prompt-flipboard
 import { pickExamplePrompt } from "@/lib/example-prompts";
 import { HostControls } from "@/components/host-controls";
 import { LoadingPhrases } from "@/components/loading-phrases";
+import { ArtLoader } from "@/components/art-loader";
 import {
   RoundHighlightsCarousel,
   type RoundHighlight,
@@ -1267,7 +1268,7 @@ function GameClientInner({
             </>
           ) : (
             <>
-              <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+              <ArtLoader size="lg" />
               <p className="text-xl font-bold">The AI is painting…</p>
               <LoadingPhrases seed={currentRound?.id ?? `r-${room.round_num}`} />
               {isSpectator && (
@@ -1441,7 +1442,7 @@ function GameClientInner({
 
       {room.phase === "scoring" && (
         <div className="flex flex-col items-center gap-4 py-20">
-          <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+          <ArtLoader size="lg" />
           <p className="text-xl font-bold">Scoring guesses…</p>
         </div>
       )}
@@ -2071,7 +2072,7 @@ function ArtistPromptingView({
         )}
         {submitting ? (
           <div className="flex flex-col items-center gap-3 py-8">
-            <div className="h-14 w-14 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+            <ArtLoader size="md" />
             {autoSubmitFired ? (
               <p
                 data-artist-auto-submit="1"
@@ -2146,7 +2147,7 @@ function ArtistPromptingView({
 
   return (
     <div className="flex flex-col items-center gap-4 py-16 max-w-md text-center">
-      <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+      <ArtLoader size="lg" />
       <p className="text-xl font-bold">
         {artist?.display_name ?? "The artist"} is cooking something up…
       </p>
