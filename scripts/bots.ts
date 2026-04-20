@@ -255,50 +255,52 @@ async function runBot(code: string, name: string, site: string): Promise<void> {
     try {
       const { data: room, error: roomErr } = await bot.client
         .from("rooms")
-        .select("id, phase, phase_ends_at, current_round_id")
+        .select("id, phase, phase_ends_at, round_num")
         .eq("id", bot.roomId)
         .maybeSingle();
       if (roomErr || !room) continue;
 
-      const currentRoundId = room.current_round_id as string | null;
-      if (currentRoundId && currentRoundId !== bot.lastRoundId) {
-        bot.lastRoundId = currentRoundId;
+      const phase = room.phase as string;
+      const roundNum = (room.round_num as number) ?? 0;
+      if (roundNum < 1) continue; // still in lobby
+
+      // Pull round directly (not rounds_public) so artist_player_id is always
+      // present regardless of phase. Matches the fallback in game-client.tsx.
+      const { data: round } = await bot.client
+        .from("rounds")
+        .select("id, artist_player_id, image_url")
+        .eq("room_id", bot.roomId)
+        .eq("round_num", roundNum)
+        .maybeSingle();
+      if (!round) continue;
+
+      const roundId = round.id as string;
+      if (roundId !== bot.lastRoundId) {
+        bot.lastRoundId = roundId;
         bot.hasActedThisRound = false;
       }
 
-      const phase = room.phase as string;
-
-      if (phase === "prompting" && currentRoundId && !bot.hasActedThisRound) {
-        const { data: round } = await bot.client
-          .from("rounds_public")
-          .select("id, artist_player_id")
-          .eq("id", currentRoundId)
-          .maybeSingle();
-        if (round && round.artist_player_id === bot.playerId) {
-          bot.hasActedThisRound = true;
-          // Tiny delay so the human artist-prompt UI doesn't feel robotic.
-          await sleep(1500 + Math.random() * 2500);
-          await submitArtistPrompt(bot, currentRoundId, site);
-        }
+      if (
+        phase === "prompting" &&
+        round.artist_player_id === bot.playerId &&
+        !bot.hasActedThisRound
+      ) {
+        bot.hasActedThisRound = true;
+        // Tiny delay so the human artist-prompt UI doesn't feel robotic.
+        await sleep(1500 + Math.random() * 2500);
+        await submitArtistPrompt(bot, roundId, site);
       }
 
-      if (phase === "guessing" && currentRoundId && !bot.hasActedThisRound) {
-        const { data: round } = await bot.client
-          .from("rounds_public")
-          .select("id, image_url")
-          .eq("id", currentRoundId)
-          .maybeSingle();
-        if (round && round.image_url) {
-          bot.hasActedThisRound = true;
-          const msLeft = room.phase_ends_at
-            ? new Date(room.phase_ends_at as string).getTime() - Date.now()
-            : 30_000;
-          // Wait 3–15s, but never within the last 2s of the timer.
-          const maxWait = Math.max(0, Math.min(15_000, msLeft - 2000));
-          const wait = Math.min(maxWait, 3000 + Math.random() * 12_000);
-          await sleep(wait);
-          await submitGuess(bot, currentRoundId);
-        }
+      if (phase === "guessing" && round.image_url && !bot.hasActedThisRound) {
+        bot.hasActedThisRound = true;
+        const msLeft = room.phase_ends_at
+          ? new Date(room.phase_ends_at as string).getTime() - Date.now()
+          : 30_000;
+        // Wait 3–15s, but never within the last 2s of the timer.
+        const maxWait = Math.max(0, Math.min(15_000, msLeft - 2000));
+        const wait = Math.min(maxWait, 3000 + Math.random() * 12_000);
+        await sleep(wait);
+        await submitGuess(bot, roundId);
       }
     } catch (e) {
       console.warn(
