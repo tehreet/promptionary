@@ -1,20 +1,20 @@
 "use client";
 
-import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createRoomAction } from "@/app/actions/create-room";
-import { randomDisplayName } from "@/lib/player";
 
+// The visible "Your name" input used to live here, but the home page now
+// renders a single shared-name input above all three tiles (or none at all
+// when the visitor is signed in). This card just carries the form action
+// plus a hidden displayName passthrough — when `sharedName` is undefined
+// (signed-in case) we omit the field entirely and let the server action
+// fall back to `profile.display_name`.
 export function CreateRoomCard({
-  defaultName,
-}: { defaultName?: string | null } = {}) {
-  const initialName = useMemo(
-    () => defaultName ?? randomDisplayName(),
-    [defaultName],
-  );
+  sharedName,
+}: {
+  sharedName?: string;
+} = {}) {
   return (
     <Card
       className="w-full max-w-sm game-card md:-rotate-1 p-0 border-none"
@@ -41,21 +41,16 @@ export function CreateRoomCard({
       </CardHeader>
       <CardContent>
         <form action={createRoomAction} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="create-name">Your name</Label>
-            <Input
-              id="create-name"
-              name="displayName"
-              defaultValue={initialName}
-              maxLength={24}
-              required
-              className="bg-white border-2 rounded-lg h-10"
-              style={{ borderColor: "var(--game-ink)", color: "var(--game-ink)" }}
-            />
-          </div>
+          {sharedName !== undefined && (
+            <input type="hidden" name="displayName" value={sharedName} />
+          )}
 
-          <p className="text-xs leading-snug" style={{ color: "color-mix(in oklch, #1e1b4d 70%, transparent)" }}>
-            Tweak mode, theme pack, and round timing from the lobby once you&rsquo;re in.
+          <p
+            className="text-sm leading-snug font-medium"
+            style={{ color: "color-mix(in oklch, #1e1b4d 78%, transparent)" }}
+          >
+            Host a lobby for your crew. Tweak mode, theme pack, and round
+            timing once you&rsquo;re in.
           </p>
 
           <Button

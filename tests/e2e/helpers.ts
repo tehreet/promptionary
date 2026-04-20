@@ -14,10 +14,11 @@ export async function createRoomAs(
   } = {},
 ) {
   await page.goto("/");
-  // The home page has three tiles (Quick Match / Create / Join); target
-  // the Create card's name input explicitly by its id rather than by
-  // occurrence index — resilient if tile ordering changes later.
-  const nameInput = page.locator("#create-name");
+  // The home page used to carry a per-tile name input. It now renders a
+  // single shared field above the three tiles (anon path); signed-in
+  // visitors see no input at all and the server action reads from the
+  // profile. Tests run anonymously so #shared-name is always present.
+  const nameInput = page.locator("#shared-name");
   await nameInput.click();
   await nameInput.press("ControlOrMeta+a");
   await nameInput.fill(name);
@@ -70,9 +71,8 @@ export async function configureRoomFromLobby(
 
 export async function joinRoomAs(page: Page, code: string, name: string) {
   await page.goto("/");
-  // Target by id (Quick Match / Create / Join cards all live on the
-  // landing now — resilient to tile ordering changes).
-  const nameInput = page.locator("#join-name");
+  // Single shared-name input for the whole home page now.
+  const nameInput = page.locator("#shared-name");
   await nameInput.click();
   await nameInput.press("ControlOrMeta+a");
   await nameInput.fill(name);

@@ -8,7 +8,7 @@ test("invite link: opening /play/<code> shows a name form and joins", async ({
   const host = await hostCtx.newPage();
   await host.goto("/");
   const hostName = `Host${Date.now()}`;
-  const hostInput = host.locator("#create-name");
+  const hostInput = host.locator("#shared-name");
   await hostInput.click();
   await hostInput.press("ControlOrMeta+a");
   await hostInput.fill(hostName);

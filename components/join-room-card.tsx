@@ -1,20 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { joinRoomAction } from "@/app/actions/join-room";
-import { randomDisplayName } from "@/lib/player";
 
+// Name input now lives as a single shared field on the home page (or is
+// omitted entirely for signed-in visitors). This card keeps the room-code
+// input + submit button, and threads the shared name through as a hidden
+// field when present. Undefined `sharedName` ⇒ signed-in path; the server
+// action reads from the authed profile.
 export function JoinRoomCard({
-  defaultName,
-}: { defaultName?: string | null } = {}) {
-  const initialName = useMemo(
-    () => defaultName ?? randomDisplayName(),
-    [defaultName],
-  );
+  sharedName,
+}: {
+  sharedName?: string;
+} = {}) {
   return (
     <Card
       className="w-full max-w-sm game-card md:rotate-1 p-0 border-none"
@@ -41,18 +42,9 @@ export function JoinRoomCard({
       </CardHeader>
       <CardContent>
         <form action={joinRoomAction} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="join-name">Your name</Label>
-            <Input
-              id="join-name"
-              name="displayName"
-              defaultValue={initialName}
-              maxLength={24}
-              required
-              className="bg-white border-2 rounded-lg h-10"
-              style={{ borderColor: "var(--game-ink)", color: "var(--game-ink)" }}
-            />
-          </div>
+          {sharedName !== undefined && (
+            <input type="hidden" name="displayName" value={sharedName} />
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="join-code">Room code</Label>
             <Input

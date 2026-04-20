@@ -14,7 +14,7 @@ test.skip("creates 5 rooms, 6th is rate-limited", async ({ browser }) => {
 
   for (let i = 1; i <= 5; i++) {
     await page.goto("/");
-    const nameInput = page.locator("#create-name");
+    const nameInput = page.locator("#shared-name");
     await nameInput.click();
     await nameInput.press("ControlOrMeta+a");
     await nameInput.fill(`RL${Date.now()}-${i}`);
@@ -24,7 +24,7 @@ test.skip("creates 5 rooms, 6th is rate-limited", async ({ browser }) => {
 
   // 6th attempt — same IP, within the hour window.
   await page.goto("/");
-  const nameInput = page.locator("#create-name");
+  const nameInput = page.locator("#shared-name");
   await nameInput.click();
   await nameInput.press("ControlOrMeta+a");
   await nameInput.fill(`RL${Date.now()}-6`);
