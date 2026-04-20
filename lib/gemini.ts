@@ -2,7 +2,37 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { serverEnv } from "@/lib/env";
 import { sampleDimensions, type PackId } from "@/lib/prompt-dimensions";
 
-const ai = new GoogleGenAI({ apiKey: serverEnv!.GOOGLE_GENAI_API_KEY! });
+// Test-mode bypass. When `PROMPTIONARY_MOCK_GEMINI=1` is set on the server,
+// every exported Gemini helper returns a deterministic fake instead of
+// calling the real `@google/genai` SDK. This lets e2e specs exercise the
+// full round flow (author -> image -> tokenize -> embed -> score) in
+// <15s without burning API quota or waiting on 30-90s of real Gemini work.
+//
+// The flag is a server-only read (typeof window === "undefined") so a
+// compromised client can't force fakes. If it's accidentally enabled on
+// Vercel prod we log a loud ERROR at boot — but don't throw, because a
+// thrown module-init error nukes the whole app and a mock that paints a
+// 4x4 PNG is less bad than an outage.
+const MOCK_GEMINI =
+  typeof window === "undefined" && process.env.PROMPTIONARY_MOCK_GEMINI === "1";
+
+if (MOCK_GEMINI) {
+  console.info(
+    "[gemini] PROMPTIONARY_MOCK_GEMINI=1 — using deterministic fakes for author/tag/image/embed/moderate",
+  );
+}
+
+if (MOCK_GEMINI && process.env.VERCEL_ENV === "production") {
+  console.error(
+    "ERROR: PROMPTIONARY_MOCK_GEMINI=1 is set in a Vercel production env. " +
+      "Gemini calls are being stubbed with deterministic fakes — disable this flag " +
+      "before shipping, or real players will see canned images and canned prompts.",
+  );
+}
+
+const ai = MOCK_GEMINI
+  ? (null as unknown as GoogleGenAI)
+  : new GoogleGenAI({ apiKey: serverEnv!.GOOGLE_GENAI_API_KEY! });
 
 function buildAuthorInstruction(
   previousPrompts: string[] = [],
@@ -35,16 +65,76 @@ After writing the prompt, tag every word with its role:
 Tokenize the prompt word-by-word in reading order. Every word of your prompt must appear in the tokens array exactly once, in order. Hyphenated terms stay as a single token.`;
 }
 
+type PromptToken = {
+  token: string;
+  role: "subject" | "style" | "modifier" | "filler";
+};
+
+// Deterministic tokenizer for mock mode. Reproduces the real Gemini
+// contract: every word of the prompt appears in tokens once, in order.
+// Role assignment is a tiny static heuristic — good enough for scoring
+// math to be non-trivial and reproducible.
+const MOCK_SUBJECT_WORDS = new Set([
+  "cat",
+  "dog",
+  "astronaut",
+  "robot",
+  "baker",
+  "kitchen",
+  "castle",
+  "forest",
+  "self-portrait",
+]);
+const MOCK_STYLE_WORDS = new Set([
+  "painting",
+  "watercolor",
+  "cinematic",
+  "linocut",
+  "impressionist",
+  "cartoon",
+]);
+const MOCK_FILLER_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "in",
+  "on",
+  "of",
+  "at",
+  "and",
+  "or",
+  "with",
+  "by",
+]);
+function mockTokenize(prompt: string): PromptToken[] {
+  const words = prompt.split(/\s+/).filter((w) => w.length > 0);
+  return words.map((raw) => {
+    const clean = raw.replace(/[^A-Za-z0-9-]/g, "").toLowerCase();
+    if (MOCK_FILLER_WORDS.has(clean)) return { token: raw, role: "filler" };
+    if (MOCK_STYLE_WORDS.has(clean)) return { token: raw, role: "style" };
+    if (MOCK_SUBJECT_WORDS.has(clean)) return { token: raw, role: "subject" };
+    return { token: raw, role: "modifier" };
+  });
+}
+
+const MOCK_PROMPT = "a cat painting a self-portrait in a sunlit kitchen";
+
 export async function authorPromptWithRoles(
   previousPrompts: string[] = [],
   pack: PackId = "mixed",
 ): Promise<{
   prompt: string;
-  tokens: Array<{
-    token: string;
-    role: "subject" | "style" | "modifier" | "filler";
-  }>;
+  tokens: PromptToken[];
 }> {
+  if (MOCK_GEMINI) {
+    // Cheap uniqueness so two back-to-back rounds don't collide with the
+    // avoid-recent path. If we've used MOCK_PROMPT, tack on a salt.
+    const salt = previousPrompts.includes(MOCK_PROMPT)
+      ? ` round ${previousPrompts.length + 1}`
+      : "";
+    const prompt = `${MOCK_PROMPT}${salt}`;
+    return { prompt, tokens: mockTokenize(prompt) };
+  }
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: buildAuthorInstruction(previousPrompts, pack),
@@ -91,11 +181,11 @@ const IMAGE_MODELS = [
 // Artist-mode rounds: the artist already wrote the prompt, we just need role
 // tags so scoring can weight subject/style words differently from filler.
 export async function tagPromptRoles(prompt: string): Promise<{
-  tokens: Array<{
-    token: string;
-    role: "subject" | "style" | "modifier" | "filler";
-  }>;
+  tokens: PromptToken[];
 }> {
+  if (MOCK_GEMINI) {
+    return { tokens: mockTokenize(prompt) };
+  }
   const instruction = `Tag every word of this image prompt with its role.
 - subject: nouns a player would guess (cat, castle, baker)
 - style: explicit style/medium cues (watercolor, cinematic, linocut)
@@ -145,6 +235,11 @@ Prompt: "${prompt}"`;
 export async function moderatePrompt(
   text: string,
 ): Promise<{ safe: boolean; reason?: string }> {
+  if (MOCK_GEMINI) {
+    // Always safe in mock mode — specs that want rejection should use the
+    // route-level `page.route` override pattern (see artist-rejection-ui.spec.ts).
+    return { safe: true };
+  }
   const instruction = `You are a moderator for a party game called Promptionary. The user below is about to send the following text to an AI image generator that all players in the room will see. Decide if the prompt is safe for a mixed audience — no hateful content, no sexual content, no graphic violence, no personal attacks, no slurs, no targeting of real private individuals. Standard playful edge (cartoon goofiness, mild crude humor, fantasy violence like dragons fighting knights) is fine.
 
 Reply with exactly one line in one of these two forms, nothing else:
@@ -174,7 +269,20 @@ Prompt:
   return { safe: true };
 }
 
+// Smallest valid opaque PNG: 4x4, solid color, zlib-compressed.
+// Prebaked as base64 so we don't pull in a PNG encoder for tests.
+const MOCK_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FADnYAwE9T8B6AAAAAElFTkSuQmCC";
+const MOCK_PNG_BUFFER = Buffer.from(MOCK_PNG_BASE64, "base64");
+
 export async function generateImagePng(prompt: string): Promise<Buffer> {
+  if (MOCK_GEMINI) {
+    // `prompt` is intentionally unused — the fake PNG is identical every
+    // round. Tests only care that the upload/storage pipeline gets a valid
+    // image buffer to hand off to Supabase.
+    void prompt;
+    return MOCK_PNG_BUFFER;
+  }
   let lastErr: unknown;
   for (const model of IMAGE_MODELS) {
     try {
@@ -190,7 +298,29 @@ export async function generateImagePng(prompt: string): Promise<Buffer> {
   throw lastErr ?? new Error("no image model available");
 }
 
+// Deterministic 768-dim embedding for mock mode. Uses a cheap per-character
+// sine-based transform so cosine similarity between similar strings is
+// non-zero and reproducible. The real Gemini embedding is 768-dim too, so
+// the downstream scoring vector math stays the same shape.
+const MOCK_EMBED_DIM = 768;
+function mockEmbed(text: string): number[] {
+  const lower = text.toLowerCase();
+  const len = Math.max(1, lower.length);
+  const vec = new Array<number>(MOCK_EMBED_DIM);
+  for (let i = 0; i < MOCK_EMBED_DIM; i++) {
+    const code = lower.charCodeAt(i % len);
+    // sin(code * (i+1)) spreads the signal across dimensions, and adding a
+    // length term keeps identical prefixes from collapsing to identical
+    // vectors. Non-zero on any non-empty input — required for cosine.
+    vec[i] = Math.sin(code * (i + 1) * 0.0137) + Math.cos((i + 1) * 0.0911);
+  }
+  return vec;
+}
+
 export async function embedTexts(texts: string[]): Promise<number[][]> {
+  if (MOCK_GEMINI) {
+    return texts.map(mockEmbed);
+  }
   const out: number[][] = [];
   for (const text of texts) {
     const res = await ai.models.embedContent({
