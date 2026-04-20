@@ -143,10 +143,8 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 
 - Proper Realtime via private channels + `realtime.messages` RLS (CHANNEL_ERROR rabbit hole; migrations exist, disabled)
 - Sign in with Vercel as an OAuth provider
-- pg_cron tick as a disconnection safety net for phase transitions
-- Rate limits on room creation
+- pg_cron safety net for all phase transitions — partial: `20260419182000_infra_cleanup.sql` ships a 30s tick that only rescues stuck `lobby → generating` transitions; guessing/scoring/reveal still host-driven.
 - Moderation pass on artist-mode prompts
-- PWA manifest
 - `room_mode` enum still carries legacy `'teams'` and `'headsup'` slots that no code writes anymore — safe to drop in a future migration once we're sure no historical rows remain.
 
 **All features ship with e2e tests.** Write the test alongside the feature; don't treat it as a follow-up.
