@@ -45,6 +45,8 @@ type Room = {
   round_num: number;
   phase_ends_at: string | null;
   skip_count?: number;
+  team_turn_passes?: number;
+  team_turn_seconds?: number;
 };
 
 // Matches MAX_SKIPS_PER_ROUND in /api/skip-round — kept in sync by hand.
@@ -75,6 +77,18 @@ type Round = {
   chosen_modifier?: string | null;
   chosen_modifier_spectator_id?: string | null;
   ai_took_over?: boolean | null;
+  // Team-prompting fields. Null / 0 on non-team rounds.
+  writing_team?: number | null;
+  turn_idx?: number | null;
+  turn_ends_at?: string | null;
+};
+
+type RoundPhrase = {
+  round_id: string;
+  position: number;
+  player_id: string;
+  team: number;
+  phrase: string;
 };
 
 type Guess = {
@@ -179,6 +193,9 @@ function GameClientInner({
   const [modifiers, setModifiers] = useState<
     Array<{ id: string; spectator_id: string; modifier: string }>
   >([]);
+  // Team-prompting round_phrases tally. Position-ordered. Visible to writing
+  // team live; to everyone at reveal. RLS enforces the same on the server.
+  const [roundPhrases, setRoundPhrases] = useState<RoundPhrase[]>([]);
   // Skip-vote tally. Stored as voter_ids so we can dedupe optimistic updates
   // against broadcast echoes + postgres_changes fetches.
   const [skipVoters, setSkipVoters] = useState<string[]>([]);
@@ -192,8 +209,15 @@ function GameClientInner({
     [players],
   );
   // Artist-mode guessers = non-spectators excluding the round's artist.
+  // Team-prompting (teams_enabled + writing_team): only the OPPOSING team
+  // guesses — the writing team is waiting for scoring.
   const guesserCount = competitorCount;
   const submissionTotal = (() => {
+    if (currentRound?.writing_team) {
+      return players.filter(
+        (p) => !p.is_spectator && p.team && p.team !== currentRound.writing_team,
+      ).length;
+    }
     if (currentRound?.artist_player_id) {
       return Math.max(0, guesserCount - 1);
     }
@@ -269,7 +293,7 @@ function GameClientInner({
       const { data: r } = await supabase
         .from("rooms")
         .select(
-          "id, code, phase, host_id, mode, teams_enabled, taboo_enabled, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at, skip_count",
+          "id, code, phase, host_id, mode, teams_enabled, taboo_enabled, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at, skip_count, team_turn_passes, team_turn_seconds",
         )
         .eq("id", room.id)
         .maybeSingle();
@@ -292,6 +316,15 @@ function GameClientInner({
           .eq("room_id", room.id)
           .eq("round_num", targetRoundNum)
           .maybeSingle();
+        // Team-prompting columns live on `rounds` (not the public view) so
+        // the writing team can see their turn state in real time. Querying
+        // both in parallel keeps the poll tick cheap.
+        const { data: raw } = await supabase
+          .from("rounds")
+          .select("id, writing_team, turn_idx, turn_ends_at")
+          .eq("room_id", room.id)
+          .eq("round_num", targetRoundNum)
+          .maybeSingle();
         if (rd) {
           setCurrentRound((prev) => {
             if (prev && prev.id !== rd.id) {
@@ -302,7 +335,12 @@ function GameClientInner({
               setSubmissionCount(0);
               setGuessesFromReveal([]);
             }
-            return rd as Round;
+            return {
+              ...(rd as Round),
+              writing_team: raw?.writing_team ?? null,
+              turn_idx: raw?.turn_idx ?? 0,
+              turn_ends_at: raw?.turn_ends_at ?? null,
+            };
           });
 
           const { data: count } = await supabase.rpc("count_round_guesses", {
@@ -374,9 +412,13 @@ function GameClientInner({
     if (room.phase !== "generating") return;
     if (!currentRound?.id) return;
     if (generatingCalledRef.current === currentRound.id) return;
-    // Default mode: host drives. Artist mode: the artist already triggered
-    // start-round via submit-artist-prompt; skip here.
-    if (room.mode === "artist") return;
+    // Default (party) mode: host drives start-round here.
+    // Solo artist mode: the artist already triggered start-round via
+    // submit-artist-prompt; skip here.
+    // Team-prompting (teams_enabled + artist): the submit_team_phrase RPC
+    // flips the room to 'generating' after the last phrase lands, but no
+    // client has hit start-round yet — the host's tab drives it here.
+    if (room.mode === "artist" && !room.teams_enabled) return;
     if (!isHost) return;
     generatingCalledRef.current = currentRound.id;
     setStartError(null);
@@ -395,7 +437,7 @@ function GameClientInner({
         setStartError(e instanceof Error ? e.message : String(e));
       }
     })();
-  }, [isHost, room.phase, room.mode, currentRound?.id]);
+  }, [isHost, room.phase, room.mode, room.teams_enabled, currentRound?.id]);
 
   // Artist-mode fallback: if the prompting timer expires AND the artist
   // never submitted (currentRound.prompt is still empty), the host hands
@@ -974,6 +1016,86 @@ function GameClientInner({
     };
   }, [room.phase, currentRound?.id]);
 
+  // round_phrases tally for the team-prompting phase. Polls + realtime.
+  // RLS on the table already gates visibility by team, so we can trust
+  // whatever rows come back without client-side filtering.
+  useEffect(() => {
+    if (room.phase !== "prompting") {
+      setRoundPhrases([]);
+      return;
+    }
+    if (!currentRound?.id) return;
+    if (!room.teams_enabled) return;
+    const supabase = supabaseRef.current;
+    let cancel = false;
+    const fetchPhrases = async () => {
+      const { data } = await supabase
+        .from("round_phrases")
+        .select("round_id, position, player_id, team, phrase")
+        .eq("round_id", currentRound.id)
+        .order("position", { ascending: true });
+      if (!cancel && data) setRoundPhrases(data as RoundPhrase[]);
+    };
+    fetchPhrases();
+    const poll = setInterval(fetchPhrases, 1500);
+    const ch = supabase
+      .channel(`round-${currentRound.id}-phrases`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "round_phrases",
+          filter: `round_id=eq.${currentRound.id}`,
+        },
+        (payload) => {
+          const row = payload.new as RoundPhrase;
+          setRoundPhrases((prev) => {
+            if (prev.some((p) => p.position === row.position)) return prev;
+            return [...prev, row].sort((a, b) => a.position - b.position);
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      cancel = true;
+      clearInterval(poll);
+      supabase.removeChannel(ch);
+    };
+  }, [room.phase, room.teams_enabled, currentRound?.id]);
+
+  // Auto-skip expired team turns. Host's tab drives this client-side (no
+  // pg_cron). The server's skip_team_turn RPC no-ops until turn_ends_at is
+  // genuinely in the past, so racing with the active player's submission
+  // just returns an error that we swallow.
+  useEffect(() => {
+    if (room.phase !== "prompting") return;
+    if (!room.teams_enabled) return;
+    if (!isHost) return;
+    if (!currentRound?.id) return;
+    if (!currentRound.turn_ends_at) return;
+    const endsAt = new Date(currentRound.turn_ends_at).getTime();
+    const now = Date.now();
+    if (endsAt > now) return;
+    const supabase = supabaseRef.current;
+    (async () => {
+      try {
+        await supabase.rpc("skip_team_turn", { p_round_id: currentRound.id });
+      } catch {
+        // swallow — either the turn already advanced or the timer wasn't
+        // actually expired server-side (clock skew).
+      }
+    })();
+  }, [
+    room.phase,
+    room.teams_enabled,
+    isHost,
+    currentRound?.id,
+    currentRound?.turn_ends_at,
+    // `remaining` keeps this effect alive as the countdown ticks.
+    remaining,
+  ]);
+
   // Eligible voters = non-spectators, minus the artist on artist rounds.
   // Same denominator used by the skip-round endpoint server-side.
   const skipEligibleCount = useMemo(() => {
@@ -1238,7 +1360,18 @@ function GameClientInner({
         </section>
       )}
 
-      {room.phase === "prompting" && (
+      {room.phase === "prompting" && room.teams_enabled && (
+        <TeamPromptingView
+          room={room}
+          currentRound={currentRound}
+          players={players}
+          currentPlayerId={currentPlayerId}
+          myTeam={myTeam}
+          phrases={roundPhrases}
+          isSpectator={isSpectator}
+        />
+      )}
+      {room.phase === "prompting" && !room.teams_enabled && (
         <ArtistPromptingView
           room={room}
           currentRound={currentRound}
@@ -1386,6 +1519,16 @@ function GameClientInner({
           ) : iAmArtist ? (
             <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
               <p className="font-bold">You wrote this one — watch the guesses come in ✨</p>
+            </div>
+          ) : currentRound?.writing_team &&
+            myTeam === currentRound.writing_team ? (
+            <div
+              data-team-writer-waiting="1"
+              className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center"
+            >
+              <p className="font-bold">
+                Your team wrote this one — watch the other side guess ✨
+              </p>
             </div>
           ) : guessSubmitted ? (
             <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
@@ -2158,6 +2301,302 @@ function ArtistPromptingView({
         <p className="text-2xl font-black font-mono opacity-90">{remaining}s</p>
       )}
     </div>
+  );
+}
+
+// Turn-by-turn collaborative team prompt writing. Rendered when
+// teams_enabled + mode=artist + phase=prompting. Writing team members see
+// each other's phrases land live + a highlighted "your turn" chip; the
+// opposing team + spectators see a blocked view until reveal.
+function TeamPromptingView({
+  room,
+  currentRound,
+  players,
+  currentPlayerId,
+  myTeam,
+  phrases,
+  isSpectator,
+}: {
+  room: Room;
+  currentRound: Round | null;
+  players: Player[];
+  currentPlayerId: string;
+  myTeam: number | null;
+  phrases: RoundPhrase[];
+  isSpectator: boolean;
+}) {
+  const [draft, setDraft] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const supabaseRef = useRef(createSupabaseBrowserClient());
+
+  // Writing-team roster in join order (stable). Each teammate goes once per
+  // pass; turn index wraps via `turn_idx % rosterSize`.
+  const writingTeam = currentRound?.writing_team ?? null;
+  const roster = useMemo(() => {
+    if (!writingTeam) return [] as Player[];
+    return players
+      .filter((p) => !p.is_spectator && p.team === writingTeam)
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
+    // NOTE: server-side ordering is by `joined_at`. We don't have that on the
+    // client Player type; stable alphabetical is a reasonable proxy for the
+    // UI highlight + the submit_team_phrase RPC is the source of truth on
+    // whose turn it actually is.
+  }, [players, writingTeam]);
+
+  const passes = room.team_turn_passes ?? 1;
+  const turnIdx = currentRound?.turn_idx ?? 0;
+  const totalTurns = Math.max(0, roster.length * passes);
+  const activePos = roster.length > 0 ? turnIdx % roster.length : 0;
+  const currentPass = roster.length > 0 ? Math.floor(turnIdx / roster.length) + 1 : 1;
+
+  // Determine whose turn it SHOULD be client-side. The RPC guards against
+  // stale clients; this only drives the UI highlight + textarea gating.
+  const activePlayerId = roster[activePos]?.player_id ?? null;
+  const iAmOnWritingTeam = writingTeam !== null && myTeam === writingTeam && !isSpectator;
+  const isMyTurn = iAmOnWritingTeam && activePlayerId === currentPlayerId;
+
+  // Turn countdown uses rounds.turn_ends_at (per-turn, short) rather than
+  // room.phase_ends_at (which mirrors the same value but survives between
+  // turns on the room clock).
+  const turnRemaining = useCountdown(currentRound?.turn_ends_at ?? null);
+
+  async function submit() {
+    if (!currentRound?.id) return;
+    const text = draft.trim();
+    if (text.length < 1) {
+      setError("Write a phrase (or a word) to continue.");
+      return;
+    }
+    if (text.length > 60) {
+      setError("Keep it to 60 characters or fewer.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const supabase = supabaseRef.current;
+    const { error: rpcErr } = await supabase.rpc("submit_team_phrase", {
+      p_round_id: currentRound.id,
+      p_phrase: text,
+    });
+    if (rpcErr) {
+      setError(rpcErr.message);
+      setSubmitting(false);
+      return;
+    }
+    setDraft("");
+    setSubmitting(false);
+  }
+
+  // Reset the draft as the turn advances so a stale teammate's text doesn't
+  // sit in the box for the next player.
+  useEffect(() => {
+    setDraft("");
+    setError(null);
+  }, [turnIdx]);
+
+  // Non-writing view: opposing team + spectators wait. Don't leak phrases —
+  // RLS already blocks the fetch, but hide the ghost list explicitly too.
+  if (!iAmOnWritingTeam) {
+    const meta = writingTeam ? TEAM_META[writingTeam as 1 | 2] : null;
+    const otherTeamLabel = meta?.label ?? "The other team";
+    return (
+      <section
+        data-team-prompting="watcher"
+        data-writing-team={writingTeam ?? undefined}
+        className="w-full max-w-xl flex flex-col items-center gap-4 py-12 text-center"
+      >
+        <p className="text-sm uppercase tracking-widest opacity-60">
+          Round {room.round_num}
+        </p>
+        <p
+          className="text-2xl sm:text-3xl font-heading font-black"
+          style={meta ? { color: meta.color } : undefined}
+        >
+          {otherTeamLabel} is writing your challenge <span aria-hidden>💭</span>
+        </p>
+        <p className="opacity-80 text-sm max-w-md">
+          They&rsquo;re each adding a phrase, one at a time. You&rsquo;ll see the
+          full prompt at reveal — until then it&rsquo;s a surprise.
+        </p>
+        <div className="flex items-center gap-3 text-xs opacity-80 font-mono">
+          <span>
+            Turn {Math.min(turnIdx + 1, Math.max(1, totalTurns))} of {totalTurns}
+          </span>
+          {currentRound?.turn_ends_at && (
+            <span
+              className={`marquee-pill${
+                turnRemaining > 0 && turnRemaining <= 3
+                  ? " marquee-pill--urgent"
+                  : ""
+              }`}
+            >
+              {turnRemaining}s
+            </span>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  // Writing-team view. Chips show the whole roster with the active teammate
+  // highlighted. If we already submitted a phrase this round, it appears in
+  // the phrases-so-far strip; otherwise it's hidden from teammates (RLS
+  // enforces the same).
+  return (
+    <section
+      data-team-prompting="writer"
+      className="w-full max-w-2xl flex flex-col items-center gap-5"
+    >
+      <div className="w-full flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="uppercase tracking-widest opacity-70">Your turn comes</span>
+          <span className="font-bold">
+            Pass {currentPass}/{passes}
+          </span>
+        </div>
+        {currentRound?.turn_ends_at && (
+          <span
+            className={`marquee-pill${
+              turnRemaining > 0 && turnRemaining <= 3 ? " marquee-pill--urgent" : ""
+            }`}
+            data-urgent={turnRemaining > 0 && turnRemaining <= 3 ? "1" : undefined}
+          >
+            <span className="live-dot" aria-hidden />
+            {turnRemaining}s
+          </span>
+        )}
+      </div>
+
+      <ul
+        data-team-roster="1"
+        className="flex flex-wrap items-center justify-center gap-2 w-full"
+      >
+        {roster.map((p, i) => {
+          const active = i === activePos;
+          const done = phrases.some((ph) => ph.player_id === p.player_id);
+          return (
+            <li
+              key={p.player_id}
+              data-active={active ? "1" : undefined}
+              data-done={done ? "1" : undefined}
+              className={`rounded-full px-3 py-1.5 border-2 text-sm font-bold flex items-center gap-2 transition ${
+                active
+                  ? "bg-primary text-primary-foreground border-primary scale-110 shadow-lg"
+                  : done
+                    ? "bg-muted text-muted-foreground border-border opacity-80"
+                    : "bg-card text-card-foreground border-border"
+              }`}
+            >
+              <span
+                className="player-chip h-6 w-6 text-xs"
+                style={{ ["--chip-color" as string]: colorForPlayer(p.player_id) } as React.CSSProperties}
+              >
+                {p.display_name[0]?.toUpperCase()}
+              </span>
+              <span className="truncate max-w-[10rem]">{p.display_name}</span>
+              {active && <span aria-hidden>✍️</span>}
+              {done && !active && <span aria-hidden>✓</span>}
+            </li>
+          );
+        })}
+      </ul>
+
+      {phrases.length > 0 && (
+        <div
+          data-team-phrases="1"
+          className="w-full rounded-2xl border-2 border-border bg-card p-3 text-left"
+        >
+          <p className="text-[10px] uppercase tracking-widest opacity-70 mb-2">
+            So far
+          </p>
+          <p className="font-mono text-base leading-relaxed break-words">
+            {phrases.map((ph, i) => {
+              const who = players.find((p) => p.player_id === ph.player_id);
+              return (
+                <span
+                  key={ph.position}
+                  data-phrase-position={ph.position}
+                  className="inline-flex items-baseline gap-1 mr-2"
+                >
+                  <span
+                    className="font-bold"
+                    style={{ color: colorForPlayer(ph.player_id) }}
+                    title={who?.display_name}
+                  >
+                    {ph.phrase}
+                  </span>
+                  {i < phrases.length - 1 && <span aria-hidden>·</span>}
+                </span>
+              );
+            })}
+          </p>
+        </div>
+      )}
+
+      {isMyTurn ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="w-full flex flex-col gap-3"
+          data-team-active-form="1"
+        >
+          <Textarea
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (error) setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (draft.trim().length >= 1) submit();
+              }
+            }}
+            placeholder="Add your phrase (1–60 chars). Think subject, style, vibe…"
+            maxLength={60}
+            rows={2}
+            autoFocus
+            disabled={submitting}
+            className="text-lg rounded-xl min-h-[72px] resize-none leading-relaxed p-4"
+          />
+          <div className="flex items-center justify-between text-xs opacity-70">
+            <span>{draft.length}/60</span>
+            <span>Enter to send · Shift+Enter for newline</span>
+          </div>
+          {error && (
+            <div
+              role="alert"
+              data-team-prompt-error="1"
+              className="bg-red-500/15 border border-red-500/30 rounded-xl px-3 py-2 text-sm"
+            >
+              {error}
+            </div>
+          )}
+          <Button
+            type="submit"
+            disabled={draft.trim().length < 1 || submitting}
+            className="font-bold h-14 px-8 rounded-xl text-lg"
+          >
+            {submitting ? "Sending…" : "Add phrase"}
+          </Button>
+        </form>
+      ) : (
+        <div
+          data-team-waiting="1"
+          className="w-full rounded-2xl bg-card border-2 border-border p-5 text-center"
+        >
+          <p className="font-bold text-lg">
+            {roster[activePos]?.display_name ?? "Your teammate"} is writing…
+          </p>
+          <p className="opacity-70 text-sm mt-1">
+            You&rsquo;ll get your turn in a sec. Hang tight.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 

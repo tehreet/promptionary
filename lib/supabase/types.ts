@@ -437,6 +437,8 @@ export type Database = {
           round_num: number
           skip_count: number
           taboo_enabled: boolean
+          team_turn_passes: number
+          team_turn_seconds: number
           teams_enabled: boolean
         }
         Insert: {
@@ -456,6 +458,8 @@ export type Database = {
           round_num?: number
           skip_count?: number
           taboo_enabled?: boolean
+          team_turn_passes?: number
+          team_turn_seconds?: number
           teams_enabled?: boolean
         }
         Update: {
@@ -475,9 +479,53 @@ export type Database = {
           round_num?: number
           skip_count?: number
           taboo_enabled?: boolean
+          team_turn_passes?: number
+          team_turn_seconds?: number
           teams_enabled?: boolean
         }
         Relationships: []
+      }
+      round_phrases: {
+        Row: {
+          created_at: string
+          phrase: string
+          player_id: string
+          position: number
+          round_id: string
+          team: number
+        }
+        Insert: {
+          created_at?: string
+          phrase: string
+          player_id: string
+          position: number
+          round_id: string
+          team: number
+        }
+        Update: {
+          created_at?: string
+          phrase?: string
+          player_id?: string
+          position?: number
+          round_id?: string
+          team?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "round_phrases_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "round_phrases_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       round_prompt_tokens: {
         Row: {
@@ -530,6 +578,9 @@ export type Database = {
           round_num: number
           started_at: string
           taboo_words: string[] | null
+          turn_ends_at: string | null
+          turn_idx: number
+          writing_team: number | null
         }
         Insert: {
           ai_took_over?: boolean
@@ -545,6 +596,9 @@ export type Database = {
           round_num: number
           started_at?: string
           taboo_words?: string[] | null
+          turn_ends_at?: string | null
+          turn_idx?: number
+          writing_team?: number | null
         }
         Update: {
           ai_took_over?: boolean
@@ -560,6 +614,9 @@ export type Database = {
           round_num?: number
           started_at?: string
           taboo_words?: string[] | null
+          turn_ends_at?: string | null
+          turn_idx?: number
+          writing_team?: number | null
         }
         Relationships: [
           {
@@ -831,7 +888,12 @@ export type Database = {
         Args: { p_enabled: boolean; p_room_id: string }
         Returns: undefined
       }
+      skip_team_turn: { Args: { p_round_id: string }; Returns: undefined }
       start_round: { Args: { p_room_id: string }; Returns: string }
+      start_team_prompting_round: {
+        Args: { p_room_id: string }
+        Returns: string
+      }
       submit_artist_prompt: {
         Args: { p_prompt: string; p_round_id: string }
         Returns: undefined
@@ -843,6 +905,17 @@ export type Database = {
       submit_modifier: {
         Args: { p_modifier: string; p_room_id: string; p_round_num: number }
         Returns: string
+      }
+      submit_team_phrase: {
+        Args: { p_phrase: string; p_round_id: string }
+        Returns: undefined
+      }
+      team_prompting_roster: {
+        Args: { p_round_id: string }
+        Returns: {
+          out_player_id: string
+          out_position: number
+        }[]
       }
       tick_phase_transitions: { Args: never; Returns: undefined }
       transfer_host: {
