@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { randomDisplayName, colorForPlayer } from "@/lib/player";
+import { randomDisplayName, chipColorsForPlayer } from "@/lib/player";
 import {
   PromptFlipboard,
   type PromptToken,
@@ -348,11 +348,13 @@ export function DailyClient(props: {
                 >
                   <span
                     className="player-chip w-10 h-10 text-sm"
-                    style={
-                      {
-                        ["--chip-color" as string]: colorForPlayer(row.player_id),
-                      } as React.CSSProperties
-                    }
+                    style={(() => {
+                      const c = chipColorsForPlayer(row.player_id);
+                      return {
+                        ["--chip-color" as string]: c.bg,
+                        ["--chip-ink" as string]: c.ink,
+                      } as React.CSSProperties;
+                    })()}
                   >
                     {i + 1}
                   </span>

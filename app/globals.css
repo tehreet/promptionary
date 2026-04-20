@@ -391,12 +391,18 @@
      style={{ "--chip-color": "#ff5eb4" }}. */
   .player-chip {
     --chip-color: var(--game-pink);
+    /* --chip-ink defaults to --game-ink (theme-flipped), but callers that
+       drive --chip-color from a random hue should pair it with a
+       luminance-matched --chip-ink via chipColorsForPlayer() so text stays
+       legible in both themes. Border/shadow keep --game-ink for the
+       outlined-sticker look regardless of chip fill. */
+    --chip-ink: var(--game-ink);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 999px;
     background: var(--chip-color);
-    color: var(--game-ink);
+    color: var(--chip-ink);
     border: 2px solid var(--game-ink);
     box-shadow: 2px 2px 0 var(--game-ink);
     font-family: var(--font-heading);

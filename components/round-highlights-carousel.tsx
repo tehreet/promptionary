@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { colorForPlayer } from "@/lib/player";
+import { chipColorsForPlayer } from "@/lib/player";
 import type { PromptToken, TokenRole } from "@/components/prompt-flipboard";
 
 export type HighlightPlayer = {
@@ -107,9 +107,13 @@ function HighlightCard({
             <span>by</span>
             <span
               className="player-chip h-5 w-5 text-[9px]"
-              style={{
-                ["--chip-color" as string]: colorForPlayer(artist.player_id),
-              } as React.CSSProperties}
+              style={(() => {
+                const c = chipColorsForPlayer(artist.player_id);
+                return {
+                  ["--chip-color" as string]: c.bg,
+                  ["--chip-ink" as string]: c.ink,
+                } as React.CSSProperties;
+              })()}
             >
               {artist.display_name[0]?.toUpperCase()}
             </span>
@@ -190,11 +194,13 @@ function HighlightCard({
         <div className="rounded-xl bg-accent text-accent-foreground border-2 border-[var(--game-ink)] px-3 py-2 flex items-start gap-2">
           <span
             className="player-chip h-7 w-7 shrink-0 text-[11px]"
-            style={{
-              ["--chip-color" as string]: colorForPlayer(
-                highlight.top_guess.player_id,
-              ),
-            } as React.CSSProperties}
+            style={(() => {
+              const c = chipColorsForPlayer(highlight.top_guess.player_id);
+              return {
+                ["--chip-color" as string]: c.bg,
+                ["--chip-ink" as string]: c.ink,
+              } as React.CSSProperties;
+            })()}
           >
             {topGuesser?.display_name[0]?.toUpperCase() ?? "?"}
           </span>

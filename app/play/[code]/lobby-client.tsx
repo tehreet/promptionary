@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { colorForPlayer } from "@/lib/player";
+import { chipColorsForPlayer, colorForPlayer } from "@/lib/player";
 import { leaveRoomAction } from "@/app/actions/leave-room";
 import { InviteCard } from "./invite-card";
 import { RoomChannelProvider } from "@/lib/room-channel";
@@ -910,13 +910,13 @@ function LobbyClientInner({
                     >
                       <span
                         className="player-chip w-8 h-8 text-xs"
-                        style={
-                          {
-                            ["--chip-color" as string]: colorForPlayer(
-                              p.player_id,
-                            ),
-                          } as React.CSSProperties
-                        }
+                        style={(() => {
+                          const c = chipColorsForPlayer(p.player_id);
+                          return {
+                            ["--chip-color" as string]: c.bg,
+                            ["--chip-ink" as string]: c.ink,
+                          } as React.CSSProperties;
+                        })()}
                       >
                         {p.display_name.slice(0, 2).toUpperCase()}
                       </span>
@@ -1013,13 +1013,13 @@ function LobbyClientInner({
                     >
                       <span
                         className="player-chip w-8 h-8 text-xs"
-                        style={
-                          {
-                            ["--chip-color" as string]: colorForPlayer(
-                              p.player_id,
-                            ),
-                          } as React.CSSProperties
-                        }
+                        style={(() => {
+                          const c = chipColorsForPlayer(p.player_id);
+                          return {
+                            ["--chip-color" as string]: c.bg,
+                            ["--chip-ink" as string]: c.ink,
+                          } as React.CSSProperties;
+                        })()}
                       >
                         {p.display_name.slice(0, 2).toUpperCase()}
                       </span>
@@ -1129,11 +1129,13 @@ function LobbyClientInner({
               >
                 <span
                   className="player-chip w-10 h-10 text-sm shrink-0"
-                  style={
-                    {
-                      ["--chip-color" as string]: colorForPlayer(p.player_id),
-                    } as React.CSSProperties
-                  }
+                  style={(() => {
+                    const c = chipColorsForPlayer(p.player_id);
+                    return {
+                      ["--chip-color" as string]: c.bg,
+                      ["--chip-ink" as string]: c.ink,
+                    } as React.CSSProperties;
+                  })()}
                 >
                   {p.display_name.slice(0, 2).toUpperCase()}
                 </span>

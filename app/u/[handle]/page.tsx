@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileStatsCard } from "@/components/profile-stats-card";
-import { colorForPlayer } from "@/lib/player";
+import { chipColorsForPlayer } from "@/lib/player";
 
 export const dynamic = "force-dynamic";
 
@@ -54,11 +54,13 @@ export default async function PublicProfilePage({
           <span
             aria-hidden
             className="player-chip w-24 h-24 text-4xl"
-            style={
-              {
-                ["--chip-color"]: colorForPlayer(profile.id),
-              } as React.CSSProperties
-            }
+            style={(() => {
+              const c = chipColorsForPlayer(profile.id);
+              return {
+                ["--chip-color"]: c.bg,
+                ["--chip-ink"]: c.ink,
+              } as React.CSSProperties;
+            })()}
           >
             {initial}
           </span>
