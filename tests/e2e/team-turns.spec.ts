@@ -54,15 +54,15 @@ test("team-turns: one team writes the prompt together, other team guesses", asyn
 
   await host.getByRole("button", { name: /Start game/ }).click();
 
-  // The team-prompting phase renders either `data-team-prompting="writer"`
-  // (one of our four teammates belongs to the writing team) or
-  // `data-team-prompting="watcher"` on the opposing team. Figure out which
-  // team got picked + identify the writing-team pages.
+  // The team-prompting phase renders `data-team-prompting="writer"` (one of
+  // our four teammates belongs to the writing team), `="watcher"` on the
+  // opposing team, or `="loading"` briefly before writing_team is known.
+  // Wait for the resolved state on every page before partitioning.
   const pages = [host, p2, p3, p4];
   await Promise.all(
     pages.map((p) =>
       p
-        .locator('[data-team-prompting]')
+        .locator('[data-team-prompting="writer"], [data-team-prompting="watcher"]')
         .first()
         .waitFor({ state: "visible", timeout: 30_000 }),
     ),
@@ -71,7 +71,7 @@ test("team-turns: one team writes the prompt together, other team guesses", asyn
   const watchers: Page[] = [];
   for (const p of pages) {
     const role = await p
-      .locator('[data-team-prompting]')
+      .locator('[data-team-prompting="writer"], [data-team-prompting="watcher"]')
       .first()
       .getAttribute("data-team-prompting");
     if (role === "writer") writers.push(p);
@@ -164,11 +164,12 @@ test("team-turns: one team writes the prompt together, other team guesses", asyn
     await expect(page.locator('[data-team-rank="2"]')).toBeVisible();
   }
 
-  // Assembled prompt = phrase1 + " " + phrase2 (verified on any client's
-  // recap flipboard — the full prompt is rendered at reveal/game_over).
+  // Assembled prompt = phrase1 + " " + phrase2. Visit /recap to see the
+  // flipboard breakdown of the full prompt.
+  await host.goto(`/play/${code}/recap`);
   const recapText = await host.locator('body').innerText();
-  expect(recapText).toContain("corgi");
-  expect(recapText).toContain("sunset");
+  expect(recapText.toLowerCase()).toContain("corgi");
+  expect(recapText.toLowerCase()).toContain("sunset");
 
   await hostCtx.close();
   await p2Ctx.close();
