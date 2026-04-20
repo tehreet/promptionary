@@ -7,9 +7,9 @@ test("host creates a room and a second player joins it", async ({ browser }) => 
   await host.goto("/");
 
   const hostName = `Host${Date.now()}`;
-  // Home page has Quick Match / Create / Join tiles; scope to the Create
-  // card by its input id rather than the fragile `.first()` ordering.
-  const hostInput = host.locator("#create-name");
+  // Home page now renders a single shared-name input above all three
+  // tiles (anon path). Signed-in visitors see no input at all.
+  const hostInput = host.locator("#shared-name");
   await hostInput.click();
   await hostInput.press("ControlOrMeta+a");
   await hostInput.fill(hostName);
@@ -30,7 +30,7 @@ test("host creates a room and a second player joins it", async ({ browser }) => 
   await joiner.goto("/");
 
   const joinerName = `Joiner${Date.now()}`;
-  const joinerInput = joiner.locator("#join-name");
+  const joinerInput = joiner.locator("#shared-name");
   await joinerInput.click();
   await joinerInput.press("ControlOrMeta+a");
   await joinerInput.fill(joinerName);

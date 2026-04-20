@@ -21,7 +21,7 @@ test("two Quick Match clicks land solo players in the same public lobby", async 
   await a.goto("/");
 
   const aName = `QuickA${Date.now()}`;
-  const aInput = a.locator("#quick-name");
+  const aInput = a.locator("#shared-name");
   await aInput.click();
   await aInput.press("ControlOrMeta+a");
   await aInput.fill(aName);
@@ -42,7 +42,7 @@ test("two Quick Match clicks land solo players in the same public lobby", async 
   await b.goto("/");
 
   const bName = `QuickB${Date.now()}`;
-  const bInput = b.locator("#quick-name");
+  const bInput = b.locator("#shared-name");
   await bInput.click();
   await bInput.press("ControlOrMeta+a");
   await bInput.fill(bName);

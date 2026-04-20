@@ -6,6 +6,7 @@ import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/profile";
 import { ensureAnonSession } from "./auth";
 
 // Extract a plausible client IP from proxy headers. Vercel sets
@@ -22,12 +23,25 @@ async function getClientIp(): Promise<string | null> {
   return h.get("x-real-ip") ?? h.get("cf-connecting-ip") ?? null;
 }
 
+// Resolve the display name in priority order:
+//   1. Whatever the anon visitor typed in the shared-name field.
+//   2. The signed-in user's `profiles.display_name`.
+//   3. A last-resort "Player###" so we never hard-fail on an empty form.
+async function resolveDisplayName(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  raw: string,
+): Promise<string> {
+  const trimmed = raw.trim();
+  if (trimmed) return trimmed;
+  const profile = await getCurrentProfile(supabase);
+  if (profile?.display_name) return profile.display_name;
+  return `Player${Math.floor(Math.random() * 900) + 100}`;
+}
+
 // One-click create. The home-page form only collects the display name —
 // mode / pack / timing all move to the host-only lobby settings panel.
 export async function createRoomAction(formData: FormData) {
   await ensureAnonSession();
-  const displayName = String(formData.get("displayName") ?? "").trim();
-  if (!displayName) throw new Error("display name required");
 
   // Rate limit by IP: 5 rooms / hour. The RPC logs the attempt atomically
   // and returns false when the caller is over the limit. Service-role only,
@@ -48,6 +62,11 @@ export async function createRoomAction(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const displayName = await resolveDisplayName(
+    supabase,
+    String(formData.get("displayName") ?? ""),
+  );
+
   const { data, error } = await supabase.rpc("create_room", {
     p_display_name: displayName,
     p_mode: "party",

@@ -1,12 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { quickMatchAction } from "@/app/actions/quick-match";
-import { randomDisplayName } from "@/lib/player";
 
 // Quick Match: solo-visitor funnel. Unlike Create / Join, there's no code
 // and no settings — one tap drops you into whichever public lobby has
@@ -15,18 +11,18 @@ import { randomDisplayName } from "@/lib/player";
 // Styled orange so it reads as a third, distinct option (not a Create
 // variant, not a Join variant). The "Jump in now" CTA makes the zero-
 // friction promise explicit.
+//
+// The name input lives on the home page as a single shared field; this
+// card just threads it through via a hidden input when present. Signed-in
+// visitors get no hidden field at all and the server action pulls their
+// display_name from the authed profile.
 export function QuickMatchCard({
-  defaultName,
+  sharedName,
   openLobbies,
 }: {
-  defaultName?: string | null;
+  sharedName?: string;
   openLobbies: number;
 } = { openLobbies: 0 }) {
-  const initialName = useMemo(
-    () => defaultName ?? randomDisplayName(),
-    [defaultName],
-  );
-
   // Craft the status line. Keeps copy short + game-showy; the zero state
   // is honest ("be the first") rather than pretending there's a queue.
   const status =
@@ -80,18 +76,19 @@ export function QuickMatchCard({
       </CardHeader>
       <CardContent>
         <form action={quickMatchAction} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="quick-name">Your name</Label>
-            <Input
-              id="quick-name"
-              name="displayName"
-              defaultValue={initialName}
-              maxLength={24}
-              required
-              className="bg-white border-2 rounded-lg h-10"
-              style={{ borderColor: "var(--game-ink)", color: "var(--game-ink)" }}
-            />
-          </div>
+          {sharedName !== undefined && (
+            <input type="hidden" name="displayName" value={sharedName} />
+          )}
+
+          <p
+            className="text-sm leading-snug font-medium"
+            style={{
+              color: "color-mix(in oklch, #1e1b4d 78%, transparent)",
+            }}
+          >
+            One tap drops you into whichever public lobby has space. No
+            code, no setup.
+          </p>
 
           <p
             className="text-xs leading-snug font-bold"
