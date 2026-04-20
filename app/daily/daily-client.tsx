@@ -12,6 +12,7 @@ import {
   type PromptToken,
   type TokenRole,
 } from "@/components/prompt-flipboard";
+import { ArtLoader } from "@/components/art-loader";
 
 type DailyGuess = {
   id: string;
@@ -238,7 +239,7 @@ export function DailyClient(props: {
         ) : (
           <div className="game-frame bg-[var(--game-paper)] p-2 w-full">
             <div className="aspect-square rounded-[10px] flex flex-col items-center justify-center gap-3">
-              <div className="h-14 w-14 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+              <ArtLoader size="md" />
               <p className="font-bold">Warming up today&rsquo;s image…</p>
             </div>
           </div>

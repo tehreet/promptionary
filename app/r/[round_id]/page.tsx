@@ -190,6 +190,21 @@ export default async function RoundHighlightsPage({
 
   return (
     <main className="game-canvas min-h-screen flex flex-col items-center gap-6 px-5 py-10 sm:py-14">
+      {room?.code && (
+        <nav className="w-full max-w-2xl flex items-center justify-between gap-3">
+          <Link
+            href={`/play/${room.code}/recap`}
+            className="inline-flex items-center gap-2 rounded-full bg-[var(--game-paper)] text-[var(--game-ink)] font-black uppercase tracking-widest text-xs sm:text-sm px-4 py-2 shadow-md border-2 border-[var(--game-ink)] hover:-translate-y-0.5 hover:shadow-lg transition-transform"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Back to highlights</span>
+          </Link>
+          <span className="inline-flex items-center rounded-full bg-[color:var(--game-pink)] text-[var(--game-cream)] font-black uppercase tracking-widest text-[10px] sm:text-xs px-3 py-1.5 shadow-md border-2 border-[var(--game-ink)]">
+            Round {round.round_num}
+          </span>
+        </nav>
+      )}
+
       <header className="flex flex-col items-center gap-2 text-center">
         <p className="text-[11px] uppercase tracking-[0.35em] opacity-70 font-black">
           Round {round.round_num} recap

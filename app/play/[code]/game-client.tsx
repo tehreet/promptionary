@@ -23,6 +23,7 @@ import { PromptFlipboard, type PromptToken } from "@/components/prompt-flipboard
 import { pickExamplePrompt } from "@/lib/example-prompts";
 import { HostControls } from "@/components/host-controls";
 import { LoadingPhrases } from "@/components/loading-phrases";
+import { ArtLoader } from "@/components/art-loader";
 import {
   RoundHighlightsCarousel,
   type RoundHighlight,
@@ -75,6 +76,7 @@ type Round = {
   ended_at: string | null;
   chosen_modifier?: string | null;
   chosen_modifier_spectator_id?: string | null;
+  ai_took_over?: boolean | null;
   // Team-prompting fields. Null / 0 on non-team rounds.
   writing_team?: number | null;
   turn_idx?: number | null;
@@ -310,7 +312,7 @@ function GameClientInner({
       if (targetRoundNum > 0) {
         const { data: rd } = await supabase
           .from("rounds_public")
-          .select("id, round_num, prompt, image_url, artist_player_id, taboo_words, ended_at")
+          .select("id, round_num, prompt, image_url, artist_player_id, taboo_words, ended_at, ai_took_over")
           .eq("room_id", room.id)
           .eq("round_num", targetRoundNum)
           .maybeSingle();
@@ -385,7 +387,7 @@ function GameClientInner({
         // field if RLS is stricter. Fetch directly.
         const { data: raw } = await supabase
           .from("rounds")
-          .select("id, round_num, image_url, artist_player_id, taboo_words, ended_at")
+          .select("id, round_num, image_url, artist_player_id, taboo_words, ended_at, ai_took_over")
           .eq("room_id", room.id)
           .eq("round_num", room.round_num)
           .maybeSingle();
@@ -436,6 +438,49 @@ function GameClientInner({
       }
     })();
   }, [isHost, room.phase, room.mode, room.teams_enabled, currentRound?.id]);
+
+  // Artist-mode fallback: if the prompting timer expires AND the artist
+  // never submitted (currentRound.prompt is still empty), the host hands
+  // the round off to Gemini's party-mode author via /api/artist-gave-up.
+  // The server endpoint is idempotent (phase + prompt-presence guarded)
+  // so a double-fire from network jitter or tab-switching is harmless.
+  const artistGaveUpCalledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isHost) return;
+    if (room.phase !== "prompting") return;
+    if (room.mode !== "artist") return;
+    if (!currentRound?.id) return;
+    if (artistGaveUpCalledRef.current === currentRound.id) return;
+    if (!room.phase_ends_at) return;
+    // Only fire once the prompting timer is genuinely up. Small skew
+    // buffer (mirrors the finalize-round trigger) so client clocks that
+    // are a hair ahead don't fire early.
+    if (new Date(room.phase_ends_at).getTime() > Date.now()) return;
+    // If the artist's prompt already landed, the phase would have advanced
+    // to 'generating' — but in case there's a render lag, guard on prompt
+    // too. currentRound.prompt is exposed via rounds_public only after
+    // reveal, so during prompting it's always null for non-artists; the
+    // server endpoint has the authoritative check.
+    artistGaveUpCalledRef.current = currentRound.id;
+    (async () => {
+      try {
+        await fetch("/api/artist-gave-up", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ round_id: currentRound.id }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [
+    isHost,
+    room.phase,
+    room.mode,
+    room.phase_ends_at,
+    remaining,
+    currentRound?.id,
+  ]);
 
   // Any member triggers /api/finalize-round when the guessing timer expires
   // OR when every competitor has submitted (via submissionCount, which the
@@ -577,7 +622,7 @@ function GameClientInner({
       const supabase = supabaseRef.current;
       const { data: rounds } = await supabase
         .from("rounds_public")
-        .select("id, round_num, prompt, image_url, artist_player_id, taboo_words")
+        .select("id, round_num, prompt, image_url, artist_player_id, taboo_words, ai_took_over")
         .eq("room_id", room.id)
         .order("round_num", { ascending: true });
       if (cancel || !rounds || rounds.length === 0) return;
@@ -1356,7 +1401,7 @@ function GameClientInner({
             </>
           ) : (
             <>
-              <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+              <ArtLoader size="lg" />
               <p className="text-xl font-bold">The AI is painting…</p>
               <LoadingPhrases seed={currentRound?.id ?? `r-${room.round_num}`} />
               {isSpectator && (
@@ -1540,7 +1585,7 @@ function GameClientInner({
 
       {room.phase === "scoring" && (
         <div className="flex flex-col items-center gap-4 py-20">
-          <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+          <ArtLoader size="lg" />
           <p className="text-xl font-bold">Scoring guesses…</p>
         </div>
       )}
@@ -1551,6 +1596,16 @@ function GameClientInner({
             Next round in <span className="font-mono font-black">{remaining}s</span>
           </p>
           <ReactionsBarWrapper />
+
+          {currentRound?.ai_took_over && (
+            <div
+              data-ai-took-over="1"
+              className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--game-ink)] bg-[var(--game-paper)] px-3 py-1 text-xs font-black uppercase tracking-widest text-[var(--game-ink)]"
+            >
+              <span aria-hidden>🤖</span>
+              <span>The AI took over</span>
+            </div>
+          )}
 
           {currentRound?.chosen_modifier && (
             <ChosenModifierBadge
@@ -2003,7 +2058,12 @@ function ArtistPromptingView({
   const [prompt, setPrompt] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoSubmitFired, setAutoSubmitFired] = useState<boolean>(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Keyed on round id so a per-round auto-submit only fires once. Keying on
+  // id (not a boolean) also guards against stale state if the artist lingers
+  // across rounds (shouldn't happen given rotation, but belt-and-braces).
+  const autoSubmittedArtistRef = useRef<string | null>(null);
 
   // Taboo words for this round, if enabled. Live-checked as the artist
   // types so we can highlight the offending chip and block submit.
@@ -2040,6 +2100,39 @@ function ArtistPromptingView({
       return () => cancelAnimationFrame(id);
     }
   }, [error, submitting]);
+
+  // Auto-submit the typed prompt when the prompting timer is almost out.
+  // Mirrors the guess-phase auto-submit: fires at ~800ms left, once per
+  // round, only if something's typed and the artist hasn't clicked Send
+  // themselves. We don't lock in empty drafts — if nothing was typed,
+  // /api/artist-gave-up fires from the host's tab and the AI takes over.
+  useEffect(() => {
+    if (!iAmArtist) return;
+    if (room.phase !== "prompting") return;
+    if (!currentRound?.id) return;
+    if (submitting) return;
+    if (autoSubmittedArtistRef.current === currentRound.id) return;
+    if (!prompt.trim()) return;
+    if (!room.phase_ends_at) return;
+    // Skip when a taboo word is still in the draft — we'd just bounce off
+    // the server check. Better to leave the draft and let the fallback
+    // hand the round to Gemini if they really ghost.
+    if (tabooHit) return;
+    const msLeft = new Date(room.phase_ends_at).getTime() - Date.now();
+    if (msLeft > 800) return;
+    autoSubmittedArtistRef.current = currentRound.id;
+    setAutoSubmitFired(true);
+    submit();
+  }, [
+    iAmArtist,
+    room.phase,
+    room.phase_ends_at,
+    remaining,
+    submitting,
+    prompt,
+    tabooHit,
+    currentRound?.id,
+  ]);
 
   async function submit() {
     if (!currentRound?.id) return;
@@ -2122,8 +2215,21 @@ function ArtistPromptingView({
         )}
         {submitting ? (
           <div className="flex flex-col items-center gap-3 py-8">
-            <div className="h-14 w-14 rounded-full border-4 border-muted border-t-foreground animate-spin" />
-            <p className="font-bold">Sending to the AI…</p>
+            <ArtLoader size="md" />
+            {autoSubmitFired ? (
+              <p
+                data-artist-auto-submit="1"
+                className="font-bold inline-flex items-center gap-2 justify-center text-primary"
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse"
+                />
+                <span>Locking in your prompt…</span>
+              </p>
+            ) : (
+              <p className="font-bold">Sending to the AI…</p>
+            )}
           </div>
         ) : (
           <form
@@ -2184,7 +2290,7 @@ function ArtistPromptingView({
 
   return (
     <div className="flex flex-col items-center gap-4 py-16 max-w-md text-center">
-      <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+      <ArtLoader size="lg" />
       <p className="text-xl font-bold">
         {artist?.display_name ?? "The artist"} is cooking something up…
       </p>

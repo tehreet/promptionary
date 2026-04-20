@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { CreateRoomCard } from "@/components/create-room-card";
-import { JoinRoomCard } from "@/components/join-room-card";
-import { QuickMatchCard } from "@/components/quick-match-card";
+import { HomeTiles } from "@/components/home-tiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/profile";
 
@@ -32,7 +30,7 @@ const steps = [
 export default async function Home() {
   const supabase = await createSupabaseServerClient();
   const profile = await getCurrentProfile(supabase);
-  const defaultName = profile?.display_name ?? null;
+  const signedIn = profile !== null;
 
   // SSR snapshot of open public lobbies for the Quick Match tile. RLS on
   // `rooms` allows any authenticated user to SELECT, so this count reflects
@@ -68,18 +66,11 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* Quick Match / Create / Join */}
-      <section
-        data-home-tiles="1"
-        className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 w-full max-w-5xl items-stretch justify-items-center"
-      >
-        <QuickMatchCard
-          defaultName={defaultName}
-          openLobbies={openLobbiesCount ?? 0}
-        />
-        <CreateRoomCard defaultName={defaultName} />
-        <JoinRoomCard defaultName={defaultName} />
-      </section>
+      {/* Shared "Your name" input (anon only) + Quick Match / Create / Join */}
+      <HomeTiles
+        signedIn={signedIn}
+        openLobbies={openLobbiesCount ?? 0}
+      />
 
       {/* Daily CTA */}
       <section className="w-full max-w-3xl">

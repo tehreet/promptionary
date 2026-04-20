@@ -29,7 +29,12 @@ export function LoadingPhrases({
     <p
       key={i}
       data-loading-phrase="1"
-      className={`loading-phrase font-heading italic text-base text-[var(--game-cream)] ${className}`}
+      // Use the semantic foreground token so the phrase reads on whatever
+      // surface the generating phase renders on. Prev used var(--game-cream)
+      // (locked cream in both themes), which disappeared on the light-mode
+      // cream canvas (see #69). text-foreground resolves to var(--game-ink),
+      // flipping dark on light and cream on dark.
+      className={`loading-phrase font-heading italic text-base text-foreground/85 ${className}`}
       aria-live="polite"
     >
       {phrase}

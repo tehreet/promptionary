@@ -565,6 +565,7 @@ export type Database = {
       }
       rounds: {
         Row: {
+          ai_took_over: boolean
           artist_player_id: string | null
           chosen_modifier: string | null
           chosen_modifier_spectator_id: string | null
@@ -582,6 +583,7 @@ export type Database = {
           writing_team: number | null
         }
         Insert: {
+          ai_took_over?: boolean
           artist_player_id?: string | null
           chosen_modifier?: string | null
           chosen_modifier_spectator_id?: string | null
@@ -599,6 +601,7 @@ export type Database = {
           writing_team?: number | null
         }
         Update: {
+          ai_took_over?: boolean
           artist_player_id?: string | null
           chosen_modifier?: string | null
           chosen_modifier_spectator_id?: string | null
@@ -751,6 +754,7 @@ export type Database = {
       }
       rounds_public: {
         Row: {
+          ai_took_over: boolean | null
           artist_player_id: string | null
           chosen_modifier: string | null
           chosen_modifier_spectator_id: string | null
