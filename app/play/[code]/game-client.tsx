@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import confetti from "canvas-confetti";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAnimatedNumber } from "@/lib/animation";
-import { RoomChannelProvider } from "@/lib/room-channel";
+import { RoomChannelProvider, useRoomChannel } from "@/lib/room-channel";
 import { LiveCursorsOverlay } from "@/components/live-cursors";
 import { ChatPanel } from "@/components/chat-panel";
 import { ReactionsBar } from "@/components/reactions-bar";
@@ -40,7 +40,11 @@ type Room = {
   reveal_seconds: number;
   round_num: number;
   phase_ends_at: string | null;
+  skip_count?: number;
 };
+
+// Matches MAX_SKIPS_PER_ROUND in /api/skip-round — kept in sync by hand.
+const MAX_SKIPS_PER_ROUND = 2;
 
 type Player = {
   player_id: string;
@@ -168,6 +172,12 @@ function GameClientInner({
   const [modifiers, setModifiers] = useState<
     Array<{ id: string; spectator_id: string; modifier: string }>
   >([]);
+  // Skip-vote tally. Stored as voter_ids so we can dedupe optimistic updates
+  // against broadcast echoes + postgres_changes fetches.
+  const [skipVoters, setSkipVoters] = useState<string[]>([]);
+  const [skipSubmitting, setSkipSubmitting] = useState<boolean>(false);
+  const [skipError, setSkipError] = useState<string | null>(null);
+  const skipTriggeredRef = useRef<string | null>(null);
   const isHost = room.host_id === currentPlayerId;
 
   const competitorCount = useMemo(
@@ -252,7 +262,7 @@ function GameClientInner({
       const { data: r } = await supabase
         .from("rooms")
         .select(
-          "id, code, phase, host_id, mode, teams_enabled, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
+          "id, code, phase, host_id, mode, teams_enabled, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at, skip_count",
         )
         .eq("id", room.id)
         .maybeSingle();
@@ -861,6 +871,154 @@ function GameClientInner({
     };
   }, [room.phase, currentRound?.id]);
 
+  // Skip-vote tally lives only during the guessing phase. Fetch on mount +
+  // poll every 2s as the postgres_changes backstop; the broadcast echo
+  // handles the fast path for live tabs.
+  useEffect(() => {
+    if (room.phase !== "guessing") {
+      setSkipVoters([]);
+      setSkipError(null);
+      setSkipSubmitting(false);
+      return;
+    }
+    if (!currentRound?.id) return;
+    const supabase = supabaseRef.current;
+    let cancel = false;
+    const fetchVotes = async () => {
+      const { data } = await supabase
+        .from("skip_votes")
+        .select("voter_id")
+        .eq("round_id", currentRound.id);
+      if (!cancel && data) {
+        setSkipVoters(
+          (data as Array<{ voter_id: string }>).map((v) => v.voter_id),
+        );
+      }
+    };
+    fetchVotes();
+    const poll = setInterval(fetchVotes, 2000);
+    return () => {
+      cancel = true;
+      clearInterval(poll);
+    };
+  }, [room.phase, currentRound?.id]);
+
+  // Eligible voters = non-spectators, minus the artist on artist rounds.
+  // Same denominator used by the skip-round endpoint server-side.
+  const skipEligibleCount = useMemo(() => {
+    let n = players.filter((p) => !p.is_spectator).length;
+    if (
+      currentRound?.artist_player_id &&
+      players.some(
+        (p) =>
+          !p.is_spectator &&
+          p.player_id === currentRound.artist_player_id,
+      )
+    ) {
+      n = Math.max(0, n - 1);
+    }
+    return n;
+  }, [players, currentRound?.artist_player_id]);
+  const skipNeeded = Math.max(1, Math.ceil(skipEligibleCount / 2));
+  const skipCountUsed = room.skip_count ?? 0;
+  const canVoteToSkip =
+    room.phase === "guessing" &&
+    !isSpectator &&
+    !iAmArtist &&
+    !!currentRound?.id &&
+    skipCountUsed < MAX_SKIPS_PER_ROUND;
+  const alreadyVotedSkip = skipVoters.includes(currentPlayerId);
+
+  const castSkipVote = useCallback(async () => {
+    if (!currentRound?.id) return;
+    if (alreadyVotedSkip) return;
+    setSkipSubmitting(true);
+    setSkipError(null);
+    const supabase = supabaseRef.current;
+    // Optimistic bump so the tally lands instantly on the voter's tab.
+    setSkipVoters((prev) =>
+      prev.includes(currentPlayerId) ? prev : [...prev, currentPlayerId],
+    );
+    const { error } = await supabase.rpc("cast_skip_vote", {
+      p_round_id: currentRound.id,
+    });
+    if (error) {
+      setSkipError(error.message);
+      // Roll back the optimistic add on failure.
+      setSkipVoters((prev) => prev.filter((id) => id !== currentPlayerId));
+    }
+    setSkipSubmitting(false);
+  }, [currentRound?.id, alreadyVotedSkip, currentPlayerId]);
+
+  // Broadcast + receive skip-vote pings on the shared live channel so every
+  // tab's tally lands sub-second without waiting on the 2s poll. The DB is
+  // still the source of truth — broadcast is just a speed boost.
+  const { channel: liveChannel } = useRoomChannel();
+  useEffect(() => {
+    if (!liveChannel) return;
+    const handler = (payload: {
+      payload?: { round_id?: string; voter_id?: string };
+    }) => {
+      const p = payload?.payload ?? {};
+      if (!p.round_id || !p.voter_id) return;
+      if (!currentRound?.id || p.round_id !== currentRound.id) return;
+      const id = p.voter_id;
+      setSkipVoters((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    };
+    liveChannel.on("broadcast", { event: "skip-vote" }, handler);
+    // Supabase JS doesn't expose per-handler removal on a shared channel;
+    // the channel itself is torn down when RoomChannelProvider unmounts.
+    // The handler early-returns on stale rounds so a leftover listener is
+    // harmless.
+  }, [liveChannel, currentRound?.id]);
+
+  // Fires exactly one broadcast per successful cast on this tab.
+  const lastBroadcastRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!liveChannel) return;
+    if (!currentRound?.id) return;
+    if (!alreadyVotedSkip) return;
+    const key = `${currentRound.id}:${currentPlayerId}`;
+    if (lastBroadcastRef.current === key) return;
+    lastBroadcastRef.current = key;
+    liveChannel.send({
+      type: "broadcast",
+      event: "skip-vote",
+      payload: { round_id: currentRound.id, voter_id: currentPlayerId },
+    });
+  }, [liveChannel, currentRound?.id, alreadyVotedSkip, currentPlayerId]);
+
+  // When the skip threshold is reached, any tab POSTs /api/skip-round. The
+  // endpoint is idempotent (atomic phase flip from guessing → generating
+  // gates a single winner; losers get `raced: true`).
+  useEffect(() => {
+    if (room.phase !== "guessing") return;
+    if (!currentRound?.id) return;
+    if (skipTriggeredRef.current === currentRound.id) return;
+    if (skipCountUsed >= MAX_SKIPS_PER_ROUND) return;
+    if (skipEligibleCount <= 0) return;
+    if (skipVoters.length < skipNeeded) return;
+    skipTriggeredRef.current = currentRound.id;
+    (async () => {
+      try {
+        await fetch("/api/skip-round", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ round_id: currentRound.id }),
+        });
+      } catch (e) {
+        console.error("[skip-round]", e);
+      }
+    })();
+  }, [
+    room.phase,
+    currentRound?.id,
+    skipVoters.length,
+    skipNeeded,
+    skipEligibleCount,
+    skipCountUsed,
+  ]);
+
   const castVote = useCallback(
     async (playerId: string) => {
       if (!currentRound?.id) return;
@@ -1101,6 +1259,47 @@ function GameClientInner({
               />
             </div>
           )}
+          {currentRound?.image_url && canVoteToSkip && (
+            <div
+              data-skip-vote="1"
+              className="w-full flex flex-col items-center gap-1"
+            >
+              <button
+                type="button"
+                onClick={castSkipVote}
+                disabled={alreadyVotedSkip || skipSubmitting}
+                className="text-xs font-bold uppercase tracking-wider rounded-full border-2 border-[color:var(--game-ink)]/40 bg-[var(--game-paper)] text-[var(--game-ink)] px-3 py-1 hover:-translate-y-0.5 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {alreadyVotedSkip
+                  ? `Voted to skip · ${skipVoters.length}/${skipNeeded}`
+                  : `Skip this one · ${skipVoters.length}/${skipNeeded}`}
+              </button>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Skips used {skipCountUsed}/{MAX_SKIPS_PER_ROUND}
+              </p>
+              {skipError && (
+                <p role="alert" className="text-[11px] text-red-600">
+                  {skipError}
+                </p>
+              )}
+            </div>
+          )}
+          {currentRound?.image_url &&
+            !canVoteToSkip &&
+            (isSpectator || iAmArtist) &&
+            skipVoters.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                {skipVoters.length}/{skipNeeded} voted to skip
+              </div>
+            )}
+          {currentRound?.image_url &&
+            skipCountUsed >= MAX_SKIPS_PER_ROUND &&
+            !isSpectator &&
+            !iAmArtist && (
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Skip cap reached ({MAX_SKIPS_PER_ROUND}/{MAX_SKIPS_PER_ROUND})
+              </div>
+            )}
           {isSpectator ? (
             <>
               <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
