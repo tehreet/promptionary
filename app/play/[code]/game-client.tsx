@@ -1332,9 +1332,9 @@ function GameClientInner({
                 value={myGuess}
                 onChange={(e) => setMyGuess(e.target.value)}
                 onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    submitGuess();
+                    if (myGuess.trim()) submitGuess();
                   }
                 }}
                 placeholder="What's the prompt? Subjects, style cues, mood — give it your best shot."
@@ -1345,7 +1345,7 @@ function GameClientInner({
               />
               <div className="flex items-center justify-between text-xs opacity-70">
                 <span>{myGuess.length}/200</span>
-                <span className="hidden sm:inline">⌘/Ctrl + Enter to submit</span>
+                <span className="hidden sm:inline">Enter to submit · Shift+Enter for newline</span>
               </div>
               <Button
                 type="submit"
@@ -1896,9 +1896,9 @@ function ArtistPromptingView({
                 if (error) setError(null);
               }}
               onKeyDown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  submit();
+                  if (prompt.trim().length >= 4) submit();
                 }
               }}
               placeholder="A raccoon delivering mail by bicycle in a watercolor cityscape at dusk..."
@@ -1911,7 +1911,7 @@ function ArtistPromptingView({
             />
             <div className="flex items-center justify-between text-xs opacity-70">
               <span>{prompt.length}/240</span>
-              <span>⌘/Ctrl + Enter to send</span>
+              <span>Enter to send · Shift+Enter for newline</span>
             </div>
             {error && (
               <div
