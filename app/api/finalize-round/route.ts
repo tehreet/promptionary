@@ -25,7 +25,9 @@ export async function POST(req: Request) {
 
   const { data: round } = await svc
     .from("rounds")
-    .select("id, room_id, prompt, ended_at, round_num, artist_player_id")
+    .select(
+      "id, room_id, prompt, ended_at, round_num, artist_player_id, writing_team",
+    )
     .eq("id", round_id)
     .maybeSingle();
   if (!round)
@@ -126,9 +128,40 @@ export async function POST(req: Request) {
       .eq("id", g.id);
   }
 
-  // Artist-mode: reward the artist with the average guesser score for the
-  // round so they're incentivized to write "guessable but not trivial" prompts.
-  if (round.artist_player_id) {
+  // Artist-mode scoring branches. Three cases:
+  //   1. Solo artist (`artist_player_id` set, `writing_team` null) — classic
+  //      single-author path. Artist gets the average of all guesser totals.
+  //   2. Team prompting (`writing_team` set) — the whole writing team each
+  //      gets the average of the OPPOSING team's individual totals for the
+  //      round. This is the minimal wiring for #57; the full team-vs-team
+  //      rewrite lands in #58.
+  //   3. Neither — party mode, no bonus.
+  if (round.writing_team && !round.artist_player_id) {
+    const opposingTeam = round.writing_team === 1 ? 2 : 1;
+    const { data: roster } = await svc
+      .from("room_players")
+      .select("player_id, team, is_spectator")
+      .eq("room_id", room.id);
+    const opponents = (roster ?? []).filter(
+      (p) => !p.is_spectator && p.team === opposingTeam,
+    );
+    const writers = (roster ?? []).filter(
+      (p) => !p.is_spectator && p.team === round.writing_team,
+    );
+    const opponentTotals = opponents.map(
+      (p) => playerScoreDelta[p.player_id] ?? 0,
+    );
+    const teamBonus =
+      opponentTotals.length > 0
+        ? Math.round(
+            opponentTotals.reduce((a, b) => a + b, 0) / opponentTotals.length,
+          )
+        : 0;
+    for (const w of writers) {
+      playerScoreDelta[w.player_id] =
+        (playerScoreDelta[w.player_id] ?? 0) + teamBonus;
+    }
+  } else if (round.artist_player_id) {
     const deltas = Object.values(playerScoreDelta);
     const artistDelta =
       deltas.length > 0
