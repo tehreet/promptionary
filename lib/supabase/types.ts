@@ -416,6 +416,7 @@ export type Database = {
           phase_ends_at: string | null
           reveal_seconds: number
           round_num: number
+          taboo_enabled: boolean
           teams_enabled: boolean
         }
         Insert: {
@@ -432,6 +433,7 @@ export type Database = {
           phase_ends_at?: string | null
           reveal_seconds?: number
           round_num?: number
+          taboo_enabled?: boolean
           teams_enabled?: boolean
         }
         Update: {
@@ -448,6 +450,7 @@ export type Database = {
           phase_ends_at?: string | null
           reveal_seconds?: number
           round_num?: number
+          taboo_enabled?: boolean
           teams_enabled?: boolean
         }
         Relationships: []
@@ -499,6 +502,7 @@ export type Database = {
           room_id: string
           round_num: number
           started_at: string
+          taboo_words: string[] | null
         }
         Insert: {
           artist_player_id?: string | null
@@ -510,6 +514,7 @@ export type Database = {
           room_id: string
           round_num: number
           started_at?: string
+          taboo_words?: string[] | null
         }
         Update: {
           artist_player_id?: string | null
@@ -521,6 +526,7 @@ export type Database = {
           room_id?: string
           round_num?: number
           started_at?: string
+          taboo_words?: string[] | null
         }
         Relationships: [
           {
@@ -599,6 +605,7 @@ export type Database = {
           room_id: string | null
           round_num: number | null
           started_at: string | null
+          taboo_words: string[] | null
         }
         Relationships: [
           {
@@ -733,6 +740,7 @@ export type Database = {
           p_pack?: Database["public"]["Enums"]["room_pack"]
           p_reveal_seconds?: number
           p_room_id: string
+          p_taboo_enabled?: boolean
         }
         Returns: undefined
       }

@@ -27,6 +27,7 @@ type Room = {
   reveal_seconds: number;
   round_num: number;
   blitz?: boolean;
+  taboo_enabled?: boolean;
 };
 
 type Player = {
@@ -107,6 +108,7 @@ function LobbyClientInner({
     room.reveal_seconds,
   );
   const [blitzOn, setBlitzOn] = useState<boolean>(!!room.blitz);
+  const [tabooOn, setTabooOn] = useState<boolean>(!!room.taboo_enabled);
   const isHost = hostId === currentPlayerId;
 
   useEffect(() => {
@@ -176,6 +178,7 @@ function LobbyClientInner({
             guess_seconds?: number;
             reveal_seconds?: number;
             blitz?: boolean;
+            taboo_enabled?: boolean;
           };
           setPhase(next.phase);
           if (next.host_id) setHostId(next.host_id);
@@ -186,6 +189,7 @@ function LobbyClientInner({
           if (typeof next.guess_seconds === "number") setGuessSeconds(next.guess_seconds);
           if (typeof next.reveal_seconds === "number") setRevealSeconds(next.reveal_seconds);
           if (typeof next.blitz === "boolean") setBlitzOn(next.blitz);
+          if (typeof next.taboo_enabled === "boolean") setTabooOn(next.taboo_enabled);
         },
       )
       .subscribe();
@@ -202,7 +206,7 @@ function LobbyClientInner({
       const { data: r } = await supabase
         .from("rooms")
         .select(
-          "phase, host_id, teams_enabled, mode, pack, max_rounds, guess_seconds, reveal_seconds, blitz",
+          "phase, host_id, teams_enabled, mode, pack, max_rounds, guess_seconds, reveal_seconds, blitz, taboo_enabled",
         )
         .eq("id", room.id)
         .maybeSingle();
@@ -215,6 +219,7 @@ function LobbyClientInner({
       if (typeof r?.guess_seconds === "number") setGuessSeconds(r.guess_seconds);
       if (typeof r?.reveal_seconds === "number") setRevealSeconds(r.reveal_seconds);
       if (typeof r?.blitz === "boolean") setBlitzOn(r.blitz);
+      if (typeof r?.taboo_enabled === "boolean") setTabooOn(r.taboo_enabled);
     }, 2000);
 
     return () => {
@@ -227,8 +232,25 @@ function LobbyClientInner({
     setStarting(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.rpc("start_round", { p_room_id: room.id });
+      const { data: newRoundId, error } = await supabase.rpc("start_round", {
+        p_room_id: room.id,
+      });
       if (error) throw error;
+      // Seed taboo words if this is an artist round with taboo_enabled. Fire-
+      // and-forget — the artist UI will fetch the round a moment later and
+      // pick up the words via the poll / rounds_public. Any failure here is
+      // non-fatal; the round just runs without taboo.
+      if (
+        tabooOn &&
+        mode === "artist" &&
+        typeof newRoundId === "string"
+      ) {
+        fetch("/api/seed-taboo-words", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ round_id: newRoundId }),
+        }).catch(() => {});
+      }
     } catch (e) {
       alert(e instanceof Error ? e.message : "failed to start");
       setStarting(false);
@@ -275,6 +297,7 @@ function LobbyClientInner({
       p_guess_seconds: number;
       p_reveal_seconds: number;
       p_blitz: boolean;
+      p_taboo_enabled: boolean;
     }>,
   ) {
     const supabase = createSupabaseBrowserClient();
@@ -328,6 +351,17 @@ function LobbyClientInner({
       setBlitzOn(prev);
       if (shouldNudge) setGuessSeconds(prevGuess);
       alert(e instanceof Error ? e.message : "failed to toggle blitz");
+    }
+  }
+
+  async function handleSetTaboo(next: boolean) {
+    const prev = tabooOn;
+    setTabooOn(next);
+    try {
+      await applySettings({ p_taboo_enabled: next });
+    } catch (e) {
+      setTabooOn(prev);
+      alert(e instanceof Error ? e.message : "failed to toggle taboo");
     }
   }
 
@@ -694,6 +728,35 @@ function LobbyClientInner({
               </span>
             </span>
           </label>
+
+          {/* Taboo toggle — artist mode only. 3 random words the artist can't
+              use in their prompt, revealed to guessers in the recap. */}
+          {mode === "artist" && (
+            <label
+              data-taboo-toggle="1"
+              className="flex items-center gap-3 rounded-xl border-2 px-3 py-2 cursor-pointer select-none transition"
+              style={{
+                borderColor: "var(--game-ink)",
+                background: tabooOn
+                  ? "var(--game-canvas-yellow)"
+                  : "var(--game-paper)",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={tabooOn}
+                onChange={(e) => handleSetTaboo(e.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              <span className="text-base leading-none">🚫</span>
+              <span className="flex-1">
+                <span className="text-sm font-black block">Taboo</span>
+                <span className="text-[11px] opacity-80">
+                  Artist can&rsquo;t use 3 random forbidden words per round.
+                </span>
+              </span>
+            </label>
+          )}
         </section>
       )}
 

@@ -26,6 +26,7 @@ import {
   RoundHighlightsCarousel,
   type RoundHighlight,
 } from "@/components/round-highlights-carousel";
+import { findTabooHit } from "@/lib/taboo-words";
 
 type Room = {
   id: string;
@@ -34,6 +35,7 @@ type Room = {
   host_id: string;
   mode: string;
   teams_enabled?: boolean;
+  taboo_enabled?: boolean;
   max_rounds: number;
   guess_seconds: number;
   reveal_seconds: number;
@@ -61,6 +63,7 @@ type Round = {
   prompt: string | null;
   image_url: string | null;
   artist_player_id: string | null;
+  taboo_words: string[] | null;
   ended_at: string | null;
 };
 
@@ -243,7 +246,7 @@ function GameClientInner({
       const { data: r } = await supabase
         .from("rooms")
         .select(
-          "id, code, phase, host_id, mode, teams_enabled, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
+          "id, code, phase, host_id, mode, teams_enabled, taboo_enabled, max_rounds, guess_seconds, reveal_seconds, round_num, phase_ends_at",
         )
         .eq("id", room.id)
         .maybeSingle();
@@ -262,7 +265,7 @@ function GameClientInner({
       if (targetRoundNum > 0) {
         const { data: rd } = await supabase
           .from("rounds_public")
-          .select("id, round_num, prompt, image_url, artist_player_id, ended_at")
+          .select("id, round_num, prompt, image_url, artist_player_id, taboo_words, ended_at")
           .eq("room_id", room.id)
           .eq("round_num", targetRoundNum)
           .maybeSingle();
@@ -302,7 +305,7 @@ function GameClientInner({
       const supabase = supabaseRef.current;
       const { data } = await supabase
         .from("rounds_public")
-        .select("id, round_num, prompt, image_url, ended_at")
+        .select("id, round_num, prompt, image_url, artist_player_id, taboo_words, ended_at")
         .eq("room_id", room.id)
         .eq("round_num", room.round_num)
         .maybeSingle();
@@ -321,7 +324,7 @@ function GameClientInner({
         // field if RLS is stricter. Fetch directly.
         const { data: raw } = await supabase
           .from("rounds")
-          .select("id, round_num, image_url, artist_player_id, ended_at")
+          .select("id, round_num, image_url, artist_player_id, taboo_words, ended_at")
           .eq("room_id", room.id)
           .eq("round_num", room.round_num)
           .maybeSingle();
@@ -446,7 +449,22 @@ function GameClientInner({
             .update({ phase: "game_over", phase_ends_at: null })
             .eq("id", room.id);
         } else {
-          await supabase.rpc("start_round", { p_room_id: room.id });
+          const { data: newRoundId } = await supabase.rpc("start_round", {
+            p_room_id: room.id,
+          });
+          // Seed taboo words for the new artist round if enabled. Non-fatal
+          // on failure — round just runs without taboo.
+          if (
+            room.mode === "artist" &&
+            room.taboo_enabled &&
+            typeof newRoundId === "string"
+          ) {
+            fetch("/api/seed-taboo-words", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ round_id: newRoundId }),
+            }).catch(() => {});
+          }
         }
       } catch (e) {
         console.error(e);
@@ -494,7 +512,7 @@ function GameClientInner({
       const supabase = supabaseRef.current;
       const { data: rounds } = await supabase
         .from("rounds_public")
-        .select("id, round_num, prompt, image_url, artist_player_id")
+        .select("id, round_num, prompt, image_url, artist_player_id, taboo_words")
         .eq("room_id", room.id)
         .order("round_num", { ascending: true });
       if (cancel || !rounds || rounds.length === 0) return;
@@ -558,6 +576,7 @@ function GameClientInner({
           prompt: r.prompt ?? null,
           image_url: r.image_url ?? null,
           artist_player_id: r.artist_player_id ?? null,
+          taboo_words: r.taboo_words ?? null,
           tokens: tokensByRound.get(r.id!) ?? [],
           top_guess: topByRound.get(r.id!) ?? null,
         }));
@@ -1102,6 +1121,24 @@ function GameClientInner({
               tokens={promptTokens}
             />
           )}
+          {currentRound?.taboo_words && currentRound.taboo_words.length > 0 && (
+            <div
+              data-reveal-taboo="1"
+              className="w-full max-w-xl rounded-2xl border-2 border-[var(--game-ink)] bg-[var(--game-paper)] px-4 py-3 flex flex-wrap items-center justify-center gap-2"
+            >
+              <span className="text-[11px] font-black uppercase tracking-widest text-[var(--game-ink)]/80">
+                🚫 They couldn&rsquo;t say
+              </span>
+              {currentRound.taboo_words.map((w) => (
+                <span
+                  key={w}
+                  className="inline-flex items-center rounded-full border-2 border-red-500/60 bg-red-500/10 px-3 py-0.5 text-[12px] font-black text-red-600 line-through"
+                >
+                  {w}
+                </span>
+              ))}
+            </div>
+          )}
           {tiebreakerActive && tiebreaker && (
             <SpectatorTiebreaker
               top1={tiebreaker.top1}
@@ -1501,6 +1538,19 @@ function ArtistPromptingView({
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Taboo words for this round, if enabled. Live-checked as the artist
+  // types so we can highlight the offending chip and block submit.
+  const tabooWords = currentRound?.taboo_words ?? null;
+  const tabooHit = useMemo(
+    () => (tabooWords ? findTabooHit(prompt, tabooWords) : null),
+    [prompt, tabooWords],
+  );
+  const hitWords = useMemo(() => {
+    if (!tabooWords) return new Set<string>();
+    const hay = prompt.toLowerCase();
+    return new Set(tabooWords.filter((w) => hay.includes(w.toLowerCase())));
+  }, [prompt, tabooWords]);
+
   // After an error lands, refocus the textarea so the artist can immediately
   // keep typing / fixing. The form is re-rendered (submitting flipped back to
   // false) so autoFocus on mount doesn't help here.
@@ -1530,6 +1580,15 @@ function ArtistPromptingView({
     if (text.length < 4) {
       setError("Write at least 4 characters.");
       return;
+    }
+    // Client-side taboo guard — server double-checks but we may as well
+    // save the roundtrip and keep the error copy identical.
+    if (tabooWords) {
+      const hit = findTabooHit(text, tabooWords);
+      if (hit) {
+        setError(`You can't use a banned word: "${hit}"`);
+        return;
+      }
     }
     setSubmitting(true);
     setError(null);
@@ -1567,6 +1626,33 @@ function ArtistPromptingView({
           Write a secret prompt. Keep it guessable but not too easy — you score
           the average of everyone&rsquo;s guesses.
         </p>
+        {tabooWords && tabooWords.length > 0 && (
+          <div
+            data-artist-taboo="1"
+            className="w-full rounded-xl border-2 border-red-500/40 bg-red-500/10 px-3 py-2 flex flex-wrap items-center gap-2"
+          >
+            <span className="text-[11px] font-black uppercase tracking-wider text-red-600">
+              🚫 You can&rsquo;t use:
+            </span>
+            {tabooWords.map((w) => {
+              const hit = hitWords.has(w);
+              return (
+                <span
+                  key={w}
+                  data-taboo-word={w}
+                  data-taboo-hit={hit ? "1" : undefined}
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-black border-2 transition ${
+                    hit
+                      ? "bg-red-600 border-red-700 text-white animate-pulse"
+                      : "bg-[var(--game-paper)] border-red-500/50 text-red-700"
+                  }`}
+                >
+                  {w}
+                </span>
+              );
+            })}
+          </div>
+        )}
         {submitting ? (
           <div className="flex flex-col items-center gap-3 py-8">
             <div className="h-14 w-14 rounded-full border-4 border-muted border-t-foreground animate-spin" />
@@ -1618,10 +1704,10 @@ function ArtistPromptingView({
             )}
             <Button
               type="submit"
-              disabled={prompt.trim().length < 4}
+              disabled={prompt.trim().length < 4 || !!tabooHit}
               className="font-bold h-14 px-8 rounded-xl text-lg"
             >
-              Send to the AI
+              {tabooHit ? `Remove "${tabooHit}" first` : "Send to the AI"}
             </Button>
           </form>
         )}
