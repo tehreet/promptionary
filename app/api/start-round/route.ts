@@ -55,6 +55,26 @@ export async function POST(req: Request) {
     );
   }
 
+  // Spectators' modifiers from the PREVIOUS round become the pool we draw
+  // from for THIS round. One is picked at random and appended. If none
+  // were submitted, `chosenModifier` stays null and the prompt is used
+  // as-authored.
+  let chosenModifier: { modifier: string; spectator_id: string } | null = null;
+  if (round.round_num > 1) {
+    const { data: mods } = await svc
+      .from("spectator_modifiers")
+      .select("modifier, spectator_id")
+      .eq("room_id", round.room_id)
+      .eq("round_num", round.round_num - 1);
+    if (mods && mods.length > 0) {
+      const pick = mods[Math.floor(Math.random() * mods.length)];
+      chosenModifier = {
+        modifier: pick.modifier,
+        spectator_id: pick.spectator_id,
+      };
+    }
+  }
+
   let prompt: string;
   let tokens: Awaited<ReturnType<typeof authorPromptWithRoles>>["tokens"];
   let pngBuffer: Buffer;
@@ -62,7 +82,10 @@ export async function POST(req: Request) {
     if (round.prompt && round.prompt.length > 0) {
       // Artist-mode round: the artist already wrote the prompt. Tag it and
       // generate the image in parallel — neither depends on the other.
-      prompt = round.prompt;
+      // If a spectator modifier applies, tack it on before Gemini sees it.
+      prompt = chosenModifier
+        ? `${round.prompt} ${chosenModifier.modifier}`
+        : round.prompt;
       const [tagRes, img] = await Promise.all([
         tagPromptRoles(prompt),
         generateImagePng(prompt),
@@ -82,10 +105,14 @@ export async function POST(req: Request) {
       const previousPrompts = (recentRounds ?? [])
         .map((r) => r.prompt)
         .filter((p): p is string => !!p);
-      ({ prompt, tokens } = await authorPromptWithRoles(
+      let authored: string;
+      ({ prompt: authored, tokens } = await authorPromptWithRoles(
         previousPrompts,
         room.pack ?? "mixed",
       ));
+      prompt = chosenModifier
+        ? `${authored} ${chosenModifier.modifier}`
+        : authored;
       pngBuffer = await generateImagePng(prompt);
     }
   } catch (e) {
@@ -134,6 +161,8 @@ export async function POST(req: Request) {
         prompt,
         image_url: publicUrl.publicUrl,
         image_storage_path: storagePath,
+        chosen_modifier: chosenModifier?.modifier ?? null,
+        chosen_modifier_spectator_id: chosenModifier?.spectator_id ?? null,
       })
       .eq("id", round.id),
     svc

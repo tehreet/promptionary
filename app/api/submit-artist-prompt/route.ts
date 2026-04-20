@@ -111,6 +111,28 @@ export async function POST(req: Request) {
     );
   }
 
+  // Spectator modifiers from the PREVIOUS round: pick one at random and
+  // tack it onto the artist's prompt before sending it to Gemini. Matches
+  // the behavior in /api/start-round for party mode.
+  let chosenModifier: { modifier: string; spectator_id: string } | null = null;
+  if (round.round_num > 1) {
+    const { data: mods } = await svc
+      .from("spectator_modifiers")
+      .select("modifier, spectator_id")
+      .eq("room_id", round.room_id)
+      .eq("round_num", round.round_num - 1);
+    if (mods && mods.length > 0) {
+      const pick = mods[Math.floor(Math.random() * mods.length)];
+      chosenModifier = {
+        modifier: pick.modifier,
+        spectator_id: pick.spectator_id,
+      };
+    }
+  }
+  const finalPrompt = chosenModifier
+    ? `${round.prompt} ${chosenModifier.modifier}`
+    : round.prompt;
+
   // Lightweight moderation pass on user-written artist prompts. Party-mode
   // prompts come from Gemini so they're safe by construction — this is only
   // the artist's typed text. Fail open on any moderation error so a flaky
@@ -144,8 +166,8 @@ export async function POST(req: Request) {
   let tokens: Awaited<ReturnType<typeof tagPromptRoles>>["tokens"];
   let pngBuffer: Buffer;
   try {
-    ({ tokens } = await tagPromptRoles(round.prompt));
-    pngBuffer = await generateImagePng(round.prompt);
+    ({ tokens } = await tagPromptRoles(finalPrompt));
+    pngBuffer = await generateImagePng(finalPrompt);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[submit-artist-prompt] gemini failed", message);
@@ -198,8 +220,14 @@ export async function POST(req: Request) {
   await svc
     .from("rounds")
     .update({
+      // Persist the FINAL prompt so the reveal flipboard shows what
+      // Gemini actually rendered. Modifier attribution lives in the
+      // chosen_modifier_* columns for the "Modifier applied:" UI.
+      prompt: finalPrompt,
       image_url: publicUrl.publicUrl,
       image_storage_path: storagePath,
+      chosen_modifier: chosenModifier?.modifier ?? null,
+      chosen_modifier_spectator_id: chosenModifier?.spectator_id ?? null,
     })
     .eq("id", round.id);
 
