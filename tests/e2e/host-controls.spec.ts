@@ -63,3 +63,48 @@ test("host transfers host to another player", async ({ browser }) => {
   await hostCtx.close();
   await joinerCtx.close();
 });
+
+test("host transfer button is hidden once the round is active", async ({
+  browser,
+}) => {
+  test.skip(
+    process.env.PROMPTIONARY_MOCK_GEMINI !== "1",
+    "mock mode required; run with PROMPTIONARY_MOCK_GEMINI=1 bun dev",
+  );
+  test.setTimeout(60_000);
+
+  const hostCtx = await browser.newContext();
+  const host = await hostCtx.newPage();
+  const code = await createRoomAs(host, `Host${Date.now()}`, {
+    maxRounds: 1,
+    revealSeconds: 5,
+  });
+
+  const joinerCtx = await browser.newContext();
+  const joiner = await joinerCtx.newPage();
+  const joinerName = `Locked${Date.now()}`;
+  await joinRoomAs(joiner, code, joinerName);
+
+  // Sanity: transfer control is visible while we're still in lobby.
+  await expect(
+    host.getByRole("button", { name: new RegExp(`Make ${joinerName} host`) }),
+  ).toBeVisible({ timeout: 10_000 });
+
+  await host.getByRole("button", { name: /Start game/ }).click();
+
+  // Wait for the active phase to land (guess input on host's game screen).
+  await expect(
+    host.getByRole("textbox", { name: /What's the prompt/ }),
+  ).toBeVisible({ timeout: 60_000 });
+
+  // Crown button is gone; kick control stays (kick is allowed mid-round).
+  await expect(
+    host.getByRole("button", { name: new RegExp(`Make ${joinerName} host`) }),
+  ).toHaveCount(0);
+  await expect(
+    host.getByRole("button", { name: new RegExp(`Kick ${joinerName}`) }),
+  ).toBeVisible();
+
+  await hostCtx.close();
+  await joinerCtx.close();
+});
