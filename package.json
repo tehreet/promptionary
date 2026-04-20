@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",
-    "test:e2e:local": "PROMPTIONARY_TEST_URL=http://localhost:3000 playwright test"
+    "test:e2e:local": "PROMPTIONARY_TEST_URL=http://localhost:3000 playwright test",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -37,11 +39,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.4",
     "canvas-confetti": "^1.9.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.4"
   },
   "ignoreScripts": [
     "sharp",
