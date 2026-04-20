@@ -459,13 +459,14 @@ function GameClientInner({
   }, [isHost, room.phase, room.mode, room.teams_enabled, currentRound?.id]);
 
   // Artist-mode fallback: if the prompting timer expires AND the artist
-  // never submitted (currentRound.prompt is still empty), the host hands
-  // the round off to Gemini's party-mode author via /api/artist-gave-up.
-  // The server endpoint is idempotent (phase + prompt-presence guarded)
-  // so a double-fire from network jitter or tab-switching is harmless.
+  // never submitted (currentRound.prompt is still empty), any room member's
+  // tab hands the round off to Gemini's party-mode author via
+  // /api/artist-gave-up. The server flips phase to 'generating' before
+  // the Gemini call, so concurrent callers race harmlessly (second
+  // caller 409s at the phase guard). Not gated on isHost — a sleeping
+  // host tab used to stall the whole room.
   const artistGaveUpCalledRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isHost) return;
     if (room.phase !== "prompting") return;
     if (room.mode !== "artist") return;
     if (!currentRound?.id) return;
@@ -493,7 +494,6 @@ function GameClientInner({
       }
     })();
   }, [
-    isHost,
     room.phase,
     room.mode,
     room.phase_ends_at,

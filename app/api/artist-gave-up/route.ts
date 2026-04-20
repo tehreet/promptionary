@@ -46,10 +46,19 @@ export async function POST(req: Request) {
   if (!room)
     return NextResponse.json({ error: "room not found" }, { status: 404 });
 
-  // Only the host should trigger this — otherwise every competitor's tab
-  // races to fire it on timer expiry and we spam Gemini.
-  if (room.host_id !== user.id) {
-    return NextResponse.json({ error: "not host" }, { status: 403 });
+  // Any room member can trigger — the phase flip below is an advisory
+  // lock: the first caller flips to 'generating' and every subsequent
+  // caller 409s at the phase guard. Relying only on the host's tab made
+  // the game stall when they background the window (same fix we made
+  // for /api/finalize-round).
+  const { data: membership } = await svc
+    .from("room_players")
+    .select("player_id")
+    .eq("room_id", round.room_id)
+    .eq("player_id", user.id)
+    .maybeSingle();
+  if (!membership) {
+    return NextResponse.json({ error: "not a room member" }, { status: 403 });
   }
   if (room.mode !== "artist") {
     return NextResponse.json(
