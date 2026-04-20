@@ -1,3 +1,8 @@
+-- DO NOT APPLY. Kept as reference for the private-channel investigation only.
+-- When applied, `supabase_realtime.messages` RLS caused CHANNEL_ERROR with no
+-- surfaced message on subscribe(). Live features ride public broadcast +
+-- polling instead; see CLAUDE.md "Architectural notes" for the rationale.
+
 -- Enable authorization on private Realtime channels. Every channel name
 -- used in this app is "room:<uuid>" — room members can read/write messages
 -- on their own room's topic; nobody else can.
