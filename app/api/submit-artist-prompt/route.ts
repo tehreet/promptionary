@@ -6,6 +6,7 @@ import {
 } from "@/lib/supabase/server";
 import { serverEnv } from "@/lib/env";
 import { generateImagePng, moderatePrompt, tagPromptRoles } from "@/lib/gemini";
+import { findTabooHit } from "@/lib/taboo-words";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -71,10 +72,35 @@ export async function POST(req: Request) {
     );
   }
 
+  // Taboo pre-check — must happen BEFORE the RPC that advances the phase,
+  // otherwise we'd leave the room stuck in 'generating'. Fetch the round's
+  // taboo_words with the user's client (RLS verifies they're a member).
+  const trimmedPrompt = prompt.trim();
+  {
+    const { data: tabooRound } = await userSupabase
+      .from("rounds")
+      .select("taboo_words")
+      .eq("id", round_id)
+      .maybeSingle();
+    const words = (tabooRound?.taboo_words as string[] | null) ?? null;
+    if (words && words.length > 0) {
+      const hit = findTabooHit(trimmedPrompt, words);
+      if (hit) {
+        return errJson(
+          {
+            error: "taboo hit",
+            detail: `You used a banned word: "${hit}"`,
+          },
+          400,
+        );
+      }
+    }
+  }
+
   // Validate artist + advance DB phase via RPC (auth.uid() applied).
   const { error: rpcError } = await userSupabase.rpc("submit_artist_prompt", {
     p_round_id: round_id,
-    p_prompt: prompt.trim(),
+    p_prompt: trimmedPrompt,
   });
   if (rpcError) {
     // RPC failed: we never left the prompting phase, so just give the artist

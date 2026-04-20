@@ -22,6 +22,7 @@ export type RoundHighlight = {
   prompt: string | null;
   image_url: string | null;
   artist_player_id: string | null;
+  taboo_words: string[] | null;
   tokens: PromptToken[];
   top_guess: HighlightGuess | null;
 };
@@ -153,6 +154,25 @@ function HighlightCard({
           ) : (
             <span>{highlight.prompt}</span>
           )}
+        </div>
+      )}
+
+      {highlight.taboo_words && highlight.taboo_words.length > 0 && (
+        <div
+          data-highlight-taboo="1"
+          className="rounded-xl border-2 border-[var(--game-ink)]/40 bg-[var(--game-paper)] px-3 py-2 flex flex-wrap items-center gap-1.5"
+        >
+          <span className="text-[10px] font-black uppercase tracking-wider opacity-70">
+            🚫 Couldn&rsquo;t say
+          </span>
+          {highlight.taboo_words.map((w) => (
+            <span
+              key={w}
+              className="inline-flex items-center rounded-full border-2 border-red-500/60 bg-red-500/10 px-2 py-0.5 text-[11px] font-black text-red-600 line-through"
+            >
+              {w}
+            </span>
+          ))}
         </div>
       )}
 
