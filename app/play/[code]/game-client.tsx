@@ -26,6 +26,7 @@ import {
   RoundHighlightsCarousel,
   type RoundHighlight,
 } from "@/components/round-highlights-carousel";
+import { CopyRecapLink } from "./recap/copy-recap-link";
 
 type Room = {
   id: string;
@@ -1237,6 +1238,9 @@ function GameClientInner({
               </div>
             )}
             <PlayAgainControls room={room} isHost={isHost} />
+            <div className="flex items-center justify-center pt-1">
+              <CopyRecapLink code={room.code} />
+            </div>
           </div>
         </section>
       )}
