@@ -140,21 +140,34 @@ export function ChatPanel({
     const postingTeam = tab === "team" && teamTabAvailable ? team : null;
     setPosting(true);
     setSendError(null);
+    // Preserve the draft so we can restore it on timeout/error. Clear the
+    // visible input immediately for snappy feedback.
+    const pendingDraft = text;
+    setDraft("");
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.rpc("post_message", {
+      // Race the RPC against an 8s timer. Team chat was hanging indefinitely
+      // when RLS silently rejected a write (#57) — we'd rather surface "couldn't
+      // send" and let the user retry than leave them wondering.
+      const rpcPromise = supabase.rpc("post_message", {
         p_room_id: roomId,
         p_content: text,
         // Only pass p_team on team-scoped sends; omitted args use the DB
         // default (null → room-wide).
         ...(postingTeam != null ? { p_team: postingTeam } : {}),
       });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 8000),
+      );
+      const { error } = (await Promise.race([rpcPromise, timeoutPromise])) as {
+        error: { message: string } | null;
+      };
       if (error) {
         console.error("[chat] post_message error", error);
         setSendError(error.message);
+        setDraft(pendingDraft);
         return;
       }
-      setDraft("");
       // Fetch the row we just inserted, filtered to our stream so a parallel
       // send on the other stream can't race us.
       let query = supabase
@@ -185,7 +198,8 @@ export function ChatPanel({
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[chat] send threw", err);
-      setSendError(msg);
+      setSendError(msg === "timeout" ? "couldn't send" : msg);
+      setDraft(pendingDraft);
     } finally {
       setPosting(false);
     }
