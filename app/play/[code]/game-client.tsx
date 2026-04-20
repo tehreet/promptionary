@@ -62,6 +62,8 @@ type Round = {
   image_url: string | null;
   artist_player_id: string | null;
   ended_at: string | null;
+  chosen_modifier?: string | null;
+  chosen_modifier_spectator_id?: string | null;
 };
 
 type Guess = {
@@ -159,6 +161,12 @@ function GameClientInner({
   >([]);
   const [myVoteSubmitting, setMyVoteSubmitting] = useState<boolean>(false);
   const [voteError, setVoteError] = useState<string | null>(null);
+  // Spectator modifier pool for the CURRENT round. One of these will get
+  // randomly picked and appended to next round's prompt. Resets when
+  // round_num changes.
+  const [modifiers, setModifiers] = useState<
+    Array<{ id: string; spectator_id: string; modifier: string }>
+  >([]);
   const isHost = room.host_id === currentPlayerId;
 
   const competitorCount = useMemo(
@@ -753,6 +761,73 @@ function GameClientInner({
     return counts;
   }, [spectatorVotes]);
 
+  // Subscribe to spectator_modifiers for the current round so the pill-
+  // chip pool updates live for everyone (spectators watching their own
+  // contributions land, competitors peeking at what's incoming). Poll as
+  // a fallback when postgres_changes misses an event.
+  useEffect(() => {
+    if (room.round_num <= 0) {
+      setModifiers([]);
+      return;
+    }
+    // Modifiers contributed DURING this round land on the next round's
+    // prompt — the pool display follows round_num, not phase.
+    const supabase = supabaseRef.current;
+    let cancel = false;
+    const fetchMods = async () => {
+      const { data } = await supabase
+        .from("spectator_modifiers")
+        .select("id, spectator_id, modifier")
+        .eq("room_id", room.id)
+        .eq("round_num", room.round_num)
+        .order("created_at", { ascending: true });
+      if (!cancel && data) {
+        setModifiers(
+          data as Array<{ id: string; spectator_id: string; modifier: string }>,
+        );
+      }
+    };
+    fetchMods();
+    const poll = setInterval(fetchMods, 2000);
+    const ch = supabase
+      .channel(`room-${room.id}-modifiers-${room.round_num}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "spectator_modifiers",
+          filter: `room_id=eq.${room.id}`,
+        },
+        (payload) => {
+          const row = payload.new as {
+            id: string;
+            round_num: number;
+            spectator_id: string;
+            modifier: string;
+          };
+          if (row.round_num !== room.round_num) return;
+          setModifiers((prev) => {
+            if (prev.some((m) => m.id === row.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: row.id,
+                spectator_id: row.spectator_id,
+                modifier: row.modifier,
+              },
+            ];
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      cancel = true;
+      clearInterval(poll);
+      supabase.removeChannel(ch);
+    };
+  }, [room.id, room.round_num]);
+
   // Subscribe to spectator_votes for this round so the tally updates live.
   useEffect(() => {
     if (room.phase !== "reveal") {
@@ -966,6 +1041,14 @@ function GameClientInner({
               <div className="h-20 w-20 rounded-full border-4 border-muted border-t-foreground animate-spin" />
               <p className="text-xl font-bold">The AI is painting…</p>
               <LoadingPhrases seed={currentRound?.id ?? `r-${room.round_num}`} />
+              {isSpectator && (
+                <SpectatorModifierInput
+                  roomId={room.id}
+                  roundNum={room.round_num}
+                  modifiers={modifiers}
+                  currentPlayerId={currentPlayerId}
+                />
+              )}
             </>
           )}
         </div>
@@ -1018,9 +1101,17 @@ function GameClientInner({
             </div>
           )}
           {isSpectator ? (
-            <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
-              <p className="font-bold">Spectating — guesses are hidden until reveal.</p>
-            </div>
+            <>
+              <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
+                <p className="font-bold">Spectating — guesses are hidden until reveal.</p>
+              </div>
+              <SpectatorModifierInput
+                roomId={room.id}
+                roundNum={room.round_num}
+                modifiers={modifiers}
+                currentPlayerId={currentPlayerId}
+              />
+            </>
           ) : iAmArtist ? (
             <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
               <p className="font-bold">You wrote this one — watch the guesses come in ✨</p>
@@ -1082,6 +1173,16 @@ function GameClientInner({
           </p>
           <ReactionsBarWrapper />
 
+          {currentRound?.chosen_modifier && (
+            <ChosenModifierBadge
+              modifier={currentRound.chosen_modifier}
+              spectator={
+                currentRound.chosen_modifier_spectator_id
+                  ? playerById.get(currentRound.chosen_modifier_spectator_id)
+                  : undefined
+              }
+            />
+          )}
           {currentRound?.image_url && (
             <div className="game-frame bg-[var(--game-paper)] p-2 inline-block relative">
               <img
@@ -1101,6 +1202,9 @@ function GameClientInner({
               prompt={currentRound.prompt}
               tokens={promptTokens}
             />
+          )}
+          {modifiers.length > 0 && (
+            <ModifierPoolStrip modifiers={modifiers} />
           )}
           {tiebreakerActive && tiebreaker && (
             <SpectatorTiebreaker
@@ -1763,6 +1867,202 @@ function SpectatorTiebreaker({
 // Tiny overlay badge pinned to the round image during reveal/game_over that
 // copies a link to /r/<round_id>. Kept non-invasive on purpose — the share
 // page itself is where viewers land.
+// Spectator-only input card. Spectators can throw up to 3 short prompt
+// modifiers per round; one is randomly picked and appended to the NEXT
+// round's prompt (party or artist). Shows the caller's own contributions
+// under the input so they can see their submissions landed.
+function SpectatorModifierInput({
+  roomId,
+  roundNum,
+  modifiers,
+  currentPlayerId,
+}: {
+  roomId: string;
+  roundNum: number;
+  modifiers: Array<{ id: string; spectator_id: string; modifier: string }>;
+  currentPlayerId: string;
+}) {
+  const [value, setValue] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const myMods = useMemo(
+    () => modifiers.filter((m) => m.spectator_id === currentPlayerId),
+    [modifiers, currentPlayerId],
+  );
+  const atLimit = myMods.length >= 3;
+  const canSubmit = !submitting && !atLimit && value.trim().length > 0;
+
+  const submit = useCallback(async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/submit-modifier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          room_id: roomId,
+          round_num: roundNum,
+          modifier: value.trim(),
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        detail?: string;
+      };
+      if (!res.ok) {
+        setError(body.detail || body.error || `status ${res.status}`);
+      } else {
+        setValue("");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [canSubmit, roomId, roundNum, value]);
+
+  return (
+    <div
+      data-spectator-modifier-input="1"
+      className="w-full bg-card text-card-foreground border-2 border-[color:var(--game-pink)]/60 shadow-sm rounded-2xl p-4 flex flex-col gap-3 text-left"
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-lg" aria-hidden>
+          🌀
+        </span>
+        <p className="font-heading font-black text-sm uppercase tracking-wider">
+          Throw a curveball
+        </p>
+        <span className="ml-auto text-[10px] uppercase tracking-widest opacity-70 font-mono">
+          {myMods.length}/3
+        </span>
+      </div>
+      <p className="text-xs opacity-80">
+        Your modifier may get appended to the next round&rsquo;s prompt.
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+        className="flex flex-col gap-2"
+      >
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          maxLength={60}
+          disabled={atLimit || submitting}
+          placeholder="e.g., in neon colors, underwater, at 3am"
+          className="rounded-xl border border-border bg-background px-3 py-2 text-sm disabled:opacity-60"
+          aria-label="Suggest a modifier for the next round"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] opacity-60 font-mono">
+            {value.length}/60
+          </span>
+          <Button
+            type="submit"
+            disabled={!canSubmit}
+            className="h-9 px-4 rounded-xl text-sm font-bold"
+          >
+            {submitting ? "Sending…" : atLimit ? "Limit reached" : "Send"}
+          </Button>
+        </div>
+      </form>
+      {error && (
+        <p role="alert" className="text-xs text-red-600">
+          {error}
+        </p>
+      )}
+      {myMods.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {myMods.map((m) => (
+            <span
+              key={m.id}
+              data-my-modifier="1"
+              className="inline-flex items-center rounded-full bg-[color:var(--game-pink)]/15 border border-[color:var(--game-pink)]/40 px-2.5 py-1 text-[11px] font-semibold text-[color:var(--game-pink)] max-w-full"
+            >
+              <span className="truncate">{m.modifier}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Compact strip of chips shown above the round image during reveal so
+// everyone can see what shape the next round will take. Capped at last
+// 10 by the display; pool itself may be larger.
+function ModifierPoolStrip({
+  modifiers,
+}: {
+  modifiers: Array<{ id: string; spectator_id: string; modifier: string }>;
+}) {
+  const display = modifiers.slice(-10);
+  return (
+    <div
+      data-modifier-pool="1"
+      className="w-full rounded-2xl border border-border bg-muted/40 px-4 py-3 flex flex-col gap-2"
+    >
+      <p className="text-[11px] uppercase tracking-widest font-black opacity-80">
+        🌀 Spectator modifiers this round
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {display.map((m) => (
+          <span
+            key={m.id}
+            data-modifier-chip="1"
+            className="inline-flex items-center rounded-full bg-accent text-accent-foreground px-2.5 py-1 text-[11px] font-semibold max-w-full"
+          >
+            <span className="truncate">{m.modifier}</span>
+          </span>
+        ))}
+      </div>
+      <p className="text-[10px] opacity-60">
+        One gets appended to next round&rsquo;s prompt at random.
+      </p>
+    </div>
+  );
+}
+
+// Shown on the reveal if a modifier was actually baked into this round's
+// prompt (i.e. someone submitted last round). Calls out the spectator
+// so their contribution lands visibly.
+function ChosenModifierBadge({
+  modifier,
+  spectator,
+}: {
+  modifier: string;
+  spectator: Player | undefined;
+}) {
+  return (
+    <div
+      data-chosen-modifier="1"
+      className="w-full rounded-2xl border-2 border-[color:var(--game-pink)]/60 bg-[color:var(--game-pink)]/10 px-4 py-3 flex items-center gap-3 text-[color:var(--game-pink)]"
+    >
+      <span className="text-lg" aria-hidden>
+        🎭
+      </span>
+      <p className="text-sm font-bold flex-1 flex flex-wrap items-center gap-x-2">
+        <span className="uppercase tracking-widest text-[11px] font-black">
+          Modifier applied
+        </span>
+        <span className="italic font-semibold text-foreground">
+          &ldquo;{modifier}&rdquo;
+        </span>
+        {spectator && (
+          <span className="text-xs opacity-80">
+            from {spectator.display_name}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
 function ShareRoundButton({ roundId }: { roundId: string }) {
   const [copied, setCopied] = useState(false);
   const onClick = useCallback(async () => {

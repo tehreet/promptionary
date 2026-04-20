@@ -278,6 +278,24 @@ export type Database = {
         }
         Relationships: []
       }
+      room_creation_log: {
+        Row: {
+          created_at: string
+          id: number
+          ip: unknown
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          ip: unknown
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          ip?: unknown
+        }
+        Relationships: []
+      }
       room_messages: {
         Row: {
           content: string
@@ -409,6 +427,7 @@ export type Database = {
           guess_seconds: number
           host_id: string
           id: string
+          is_public: boolean
           max_rounds: number
           mode: Database["public"]["Enums"]["room_mode"]
           pack: Database["public"]["Enums"]["room_pack"]
@@ -416,6 +435,8 @@ export type Database = {
           phase_ends_at: string | null
           reveal_seconds: number
           round_num: number
+          skip_count: number
+          taboo_enabled: boolean
           teams_enabled: boolean
         }
         Insert: {
@@ -425,6 +446,7 @@ export type Database = {
           guess_seconds?: number
           host_id: string
           id?: string
+          is_public?: boolean
           max_rounds?: number
           mode?: Database["public"]["Enums"]["room_mode"]
           pack?: Database["public"]["Enums"]["room_pack"]
@@ -432,6 +454,8 @@ export type Database = {
           phase_ends_at?: string | null
           reveal_seconds?: number
           round_num?: number
+          skip_count?: number
+          taboo_enabled?: boolean
           teams_enabled?: boolean
         }
         Update: {
@@ -441,6 +465,7 @@ export type Database = {
           guess_seconds?: number
           host_id?: string
           id?: string
+          is_public?: boolean
           max_rounds?: number
           mode?: Database["public"]["Enums"]["room_mode"]
           pack?: Database["public"]["Enums"]["room_pack"]
@@ -448,6 +473,8 @@ export type Database = {
           phase_ends_at?: string | null
           reveal_seconds?: number
           round_num?: number
+          skip_count?: number
+          taboo_enabled?: boolean
           teams_enabled?: boolean
         }
         Relationships: []
@@ -491,6 +518,8 @@ export type Database = {
       rounds: {
         Row: {
           artist_player_id: string | null
+          chosen_modifier: string | null
+          chosen_modifier_spectator_id: string | null
           ended_at: string | null
           id: string
           image_storage_path: string | null
@@ -499,9 +528,12 @@ export type Database = {
           room_id: string
           round_num: number
           started_at: string
+          taboo_words: string[] | null
         }
         Insert: {
           artist_player_id?: string | null
+          chosen_modifier?: string | null
+          chosen_modifier_spectator_id?: string | null
           ended_at?: string | null
           id?: string
           image_storage_path?: string | null
@@ -510,9 +542,12 @@ export type Database = {
           room_id: string
           round_num: number
           started_at?: string
+          taboo_words?: string[] | null
         }
         Update: {
           artist_player_id?: string | null
+          chosen_modifier?: string | null
+          chosen_modifier_spectator_id?: string | null
           ended_at?: string | null
           id?: string
           image_storage_path?: string | null
@@ -521,10 +556,79 @@ export type Database = {
           room_id?: string
           round_num?: number
           started_at?: string
+          taboo_words?: string[] | null
         }
         Relationships: [
           {
             foreignKeyName: "rounds_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skip_votes: {
+        Row: {
+          created_at: string
+          round_id: string
+          voter_id: string
+        }
+        Insert: {
+          created_at?: string
+          round_id: string
+          voter_id: string
+        }
+        Update: {
+          created_at?: string
+          round_id?: string
+          voter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skip_votes_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skip_votes_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spectator_modifiers: {
+        Row: {
+          created_at: string
+          id: string
+          modifier: string
+          room_id: string
+          round_num: number
+          spectator_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          modifier: string
+          room_id: string
+          round_num: number
+          spectator_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          modifier?: string
+          room_id?: string
+          round_num?: number
+          spectator_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spectator_modifiers_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "rooms"
@@ -591,6 +695,8 @@ export type Database = {
       rounds_public: {
         Row: {
           artist_player_id: string | null
+          chosen_modifier: string | null
+          chosen_modifier_spectator_id: string | null
           ended_at: string | null
           id: string | null
           image_storage_path: string | null
@@ -599,6 +705,7 @@ export type Database = {
           room_id: string | null
           round_num: number | null
           started_at: string | null
+          taboo_words: string[] | null
         }
         Relationships: [
           {
@@ -625,10 +732,12 @@ export type Database = {
         Args: { p_player_id: string; p_round_total: number }
         Returns: undefined
       }
+      cast_skip_vote: { Args: { p_round_id: string }; Returns: undefined }
       cast_spectator_vote: {
         Args: { p_round_id: string; p_voted_player_id: string }
         Returns: undefined
       }
+      check_and_log_room_creation: { Args: { p_ip: unknown }; Returns: boolean }
       count_round_guesses: { Args: { p_round_id: string }; Returns: number }
       create_room: {
         Args: {
@@ -646,6 +755,13 @@ export type Database = {
       }
       ensure_profile_handle: { Args: { p_user_id: string }; Returns: string }
       everyone_guessed: { Args: { p_round_id: string }; Returns: boolean }
+      find_or_create_quick_match: {
+        Args: { p_display_name: string }
+        Returns: {
+          new_code: string
+          new_room_id: string
+        }[]
+      }
       generate_room_code: { Args: never; Returns: string }
       is_room_member: { Args: { p_room_id: string }; Returns: boolean }
       join_room_by_code: {
@@ -689,6 +805,7 @@ export type Database = {
         Args: { p_display_name: string; p_email: string; p_user_id: string }
         Returns: undefined
       }
+      prune_room_creation_log: { Args: never; Returns: undefined }
       realtime_topic_room: { Args: { topic: string }; Returns: string }
       resolve_spectator_votes: {
         Args: { p_round_id: string }
@@ -719,6 +836,10 @@ export type Database = {
         Args: { p_guess: string; p_round_id: string }
         Returns: string
       }
+      submit_modifier: {
+        Args: { p_modifier: string; p_room_id: string; p_round_num: number }
+        Returns: string
+      }
       tick_phase_transitions: { Args: never; Returns: undefined }
       transfer_host: {
         Args: { p_new_host_id: string; p_room_id: string }
@@ -733,6 +854,7 @@ export type Database = {
           p_pack?: Database["public"]["Enums"]["room_pack"]
           p_reveal_seconds?: number
           p_room_id: string
+          p_taboo_enabled?: boolean
         }
         Returns: undefined
       }
