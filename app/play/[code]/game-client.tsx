@@ -157,6 +157,7 @@ function GameClientInner({
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
   const [myGuess, setMyGuess] = useState<string>("");
   const [guessSubmitted, setGuessSubmitted] = useState<boolean>(false);
+  const [autoSubmitFired, setAutoSubmitFired] = useState<boolean>(false);
   const [guessesFromReveal, setGuessesFromReveal] = useState<Guess[]>([]);
   const [promptTokens, setPromptTokens] = useState<PromptToken[]>([]);
   const [highlights, setHighlights] = useState<RoundHighlight[]>([]);
@@ -290,6 +291,7 @@ function GameClientInner({
             if (prev && prev.id !== rd.id) {
               // New round — reset per-round UI state.
               setGuessSubmitted(false);
+              setAutoSubmitFired(false);
               setMyGuess("");
               setSubmissionCount(0);
               setGuessesFromReveal([]);
@@ -329,6 +331,7 @@ function GameClientInner({
         setCurrentRound((prev) => {
           if (prev && prev.id !== data.id) {
             setGuessSubmitted(false);
+            setAutoSubmitFired(false);
             setMyGuess("");
             setSubmissionCount(0);
             setGuessesFromReveal([]);
@@ -687,12 +690,14 @@ function GameClientInner({
         alert(error.message);
       }
       setGuessSubmitted(false);
+      setAutoSubmitFired(false);
     }
   }, [currentRound?.id, myGuess]);
 
   // Auto-submit whatever's in the textarea when the guess timer is almost out.
-  // Fires at ~2s left so we beat the server's "phase_ends_at > now()" check
-  // with comfortable headroom.
+  // Fires at ~800ms left — just enough server-skew headroom to beat the
+  // server's "phase_ends_at > now()" check while letting the player keep
+  // typing as long as possible.
   useEffect(() => {
     if (room.phase !== "guessing") return;
     if (guessSubmitted) return;
@@ -702,8 +707,9 @@ function GameClientInner({
     if (!myGuess.trim()) return;
     if (!room.phase_ends_at) return;
     const msLeft = new Date(room.phase_ends_at).getTime() - Date.now();
-    if (msLeft > 2000) return;
+    if (msLeft > 800) return;
     autoSubmittedRef.current = currentRound.id;
+    setAutoSubmitFired(true);
     submitGuess();
   }, [
     room.phase,
@@ -1318,7 +1324,17 @@ function GameClientInner({
             </div>
           ) : guessSubmitted ? (
             <div className="w-full bg-card text-card-foreground border border-border shadow-sm rounded-2xl p-4 text-center">
-              <p className="font-bold">Guess in! Waiting on the rest…</p>
+              {autoSubmitFired ? (
+                <p className="font-bold inline-flex items-center gap-2 justify-center text-primary">
+                  <span
+                    aria-hidden="true"
+                    className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse"
+                  />
+                  <span>Locking in your guess…</span>
+                </p>
+              ) : (
+                <p className="font-bold">Guess in! Waiting on the rest…</p>
+              )}
             </div>
           ) : (
             <form
