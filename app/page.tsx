@@ -48,12 +48,6 @@ export default async function Home() {
     <main className="min-h-screen game-canvas flex flex-col items-center gap-14 px-5 py-12 sm:py-16">
       {/* Hero */}
       <section className="text-center max-w-3xl pt-2">
-        <span
-          className="sticker mb-5"
-          style={{ ["--sticker-tilt" as string]: "-2deg" } as React.CSSProperties}
-        >
-          a ridiculous party game
-        </span>
         <h1 className="game-hero text-5xl sm:text-7xl md:text-8xl mb-5">
           Guess the <span className="game-hero-mark">prompt.</span>
         </h1>
@@ -139,7 +133,7 @@ export default async function Home() {
         className="text-xs pt-2"
         style={{ color: "color-mix(in oklch, var(--game-ink) 70%, transparent)" }}
       >
-        Made for friends. Powered by Gemini.
+        Made for friends.
       </footer>
     </main>
   );
