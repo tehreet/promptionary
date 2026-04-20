@@ -7,7 +7,7 @@ import {
   type PromptToken,
   type TokenRole,
 } from "@/components/prompt-flipboard";
-import { colorForPlayer } from "@/lib/player";
+import { chipColorsForPlayer } from "@/lib/player";
 import { CopyShareLink } from "./copy-share-link";
 
 // Finished rounds never change — let the route be statically cacheable per
@@ -272,11 +272,13 @@ export default async function RoundHighlightsPage({
                     </span>
                     <span
                       className="player-chip h-8 w-8 shrink-0 text-sm"
-                      style={
-                        {
-                          ["--chip-color"]: colorForPlayer(g.player_id),
-                        } as React.CSSProperties
-                      }
+                      style={(() => {
+                        const c = chipColorsForPlayer(g.player_id);
+                        return {
+                          ["--chip-color"]: c.bg,
+                          ["--chip-ink"]: c.ink,
+                        } as React.CSSProperties;
+                      })()}
                     >
                       {p?.display_name?.[0]?.toUpperCase() ?? "?"}
                     </span>

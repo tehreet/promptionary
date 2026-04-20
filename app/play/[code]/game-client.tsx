@@ -11,7 +11,7 @@ import { ChatPanel } from "@/components/chat-panel";
 import { ReactionsBar } from "@/components/reactions-bar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { colorForPlayer } from "@/lib/player";
+import { chipColorsForPlayer, colorForPlayer } from "@/lib/player";
 import {
   playImageLand,
   playReveal,
@@ -1330,7 +1330,13 @@ function GameClientInner({
                   </span>
                   <span
                     className="player-chip w-8 h-8 text-xs"
-                    style={{ ["--chip-color" as string]: colorForPlayer(p.player_id) } as React.CSSProperties}
+                    style={(() => {
+                      const c = chipColorsForPlayer(p.player_id);
+                      return {
+                        ["--chip-color" as string]: c.bg,
+                        ["--chip-ink" as string]: c.ink,
+                      } as React.CSSProperties;
+                    })()}
                   >
                     {p.display_name[0]?.toUpperCase()}
                   </span>
@@ -1424,11 +1430,13 @@ function GameClientInner({
               <span>Prompt by</span>
               <span
                 className="player-chip h-6 w-6 text-xs"
-                style={{
-                  ["--chip-color" as string]: colorForPlayer(
-                    currentRound.artist_player_id,
-                  ),
-                } as React.CSSProperties}
+                style={(() => {
+                  const c = chipColorsForPlayer(currentRound.artist_player_id);
+                  return {
+                    ["--chip-color" as string]: c.bg,
+                    ["--chip-ink" as string]: c.ink,
+                  } as React.CSSProperties;
+                })()}
               >
                 {playerById
                   .get(currentRound.artist_player_id)
@@ -1755,11 +1763,13 @@ function GameClientInner({
                             >
                               <span
                                 className="player-chip h-5 w-5 text-[10px]"
-                                style={{
-                                  ["--chip-color" as string]: colorForPlayer(
-                                    m.player_id,
-                                  ),
-                                } as React.CSSProperties}
+                                style={(() => {
+                                  const c = chipColorsForPlayer(m.player_id);
+                                  return {
+                                    ["--chip-color" as string]: c.bg,
+                                    ["--chip-ink" as string]: c.ink,
+                                  } as React.CSSProperties;
+                                })()}
                               >
                                 {m.display_name[0]?.toUpperCase()}
                               </span>
@@ -1848,9 +1858,13 @@ function GuessRow({
       </span>
       <span
         className="player-chip h-8 w-8 shrink-0 text-sm"
-        style={{
-          ["--chip-color" as string]: colorForPlayer(guess.player_id),
-        } as React.CSSProperties}
+        style={(() => {
+          const c = chipColorsForPlayer(guess.player_id);
+          return {
+            ["--chip-color" as string]: c.bg,
+            ["--chip-ink" as string]: c.ink,
+          } as React.CSSProperties;
+        })()}
       >
         {player?.display_name[0]?.toUpperCase()}
       </span>
@@ -1902,9 +1916,13 @@ function LeaderboardRow({
       <span className="w-6 text-center font-black opacity-70">{rank}</span>
       <span
         className="player-chip w-10 h-10 shrink-0 text-sm"
-        style={{
-          ["--chip-color" as string]: colorForPlayer(player.player_id),
-        } as React.CSSProperties}
+        style={(() => {
+          const c = chipColorsForPlayer(player.player_id);
+          return {
+            ["--chip-color" as string]: c.bg,
+            ["--chip-ink" as string]: c.ink,
+          } as React.CSSProperties;
+        })()}
       >
         {player.display_name.slice(0, 2).toUpperCase()}
       </span>
@@ -2490,7 +2508,13 @@ function TeamPromptingView({
             >
               <span
                 className="player-chip h-6 w-6 text-xs"
-                style={{ ["--chip-color" as string]: colorForPlayer(p.player_id) } as React.CSSProperties}
+                style={(() => {
+                  const c = chipColorsForPlayer(p.player_id);
+                  return {
+                    ["--chip-color" as string]: c.bg,
+                    ["--chip-ink" as string]: c.ink,
+                  } as React.CSSProperties;
+                })()}
               >
                 {p.display_name[0]?.toUpperCase()}
               </span>
@@ -2673,9 +2697,13 @@ function SpectatorTiebreaker({
               <div className="flex items-center gap-2">
                 <span
                   className="player-chip h-7 w-7 text-xs"
-                  style={{
-                    ["--chip-color" as string]: colorForPlayer(guess.player_id),
-                  } as React.CSSProperties}
+                  style={(() => {
+                    const c = chipColorsForPlayer(guess.player_id);
+                    return {
+                      ["--chip-color" as string]: c.bg,
+                      ["--chip-ink" as string]: c.ink,
+                    } as React.CSSProperties;
+                  })()}
                 >
                   {player?.display_name[0]?.toUpperCase()}
                 </span>

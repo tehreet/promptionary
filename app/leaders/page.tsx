@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { colorForPlayer } from "@/lib/player";
+import { chipColorsForPlayer } from "@/lib/player";
 
 export const dynamic = "force-dynamic";
 
@@ -67,15 +67,26 @@ function Board({
         <ol className="space-y-1">
           {rows.map((p, i) => {
             const rank = i + 1;
-            const chipColor =
+            const chipStyle =
               rank <= 3
-                ? MEDAL_COLORS[rank as 1 | 2 | 3]
-                : colorForPlayer(p.id);
+                ? // Medals are always light (gold/cream/bronze), so force
+                  // dark ink regardless of theme.
+                  ({
+                    ["--chip-color"]: MEDAL_COLORS[rank as 1 | 2 | 3],
+                    ["--chip-ink"]: "#1e1b4d",
+                  } as CSSProperties)
+                : (() => {
+                    const c = chipColorsForPlayer(p.id);
+                    return {
+                      ["--chip-color"]: c.bg,
+                      ["--chip-ink"]: c.ink,
+                    } as CSSProperties;
+                  })();
             const content = (
               <div className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-[color:color-mix(in_oklch,var(--game-ink)_5%,transparent)] transition">
                 <span
                   className="player-chip w-9 h-9 text-sm shrink-0"
-                  style={{ ["--chip-color"]: chipColor } as CSSProperties}
+                  style={chipStyle}
                 >
                   {rank}
                 </span>

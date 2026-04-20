@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import type { PromptToken, TokenRole } from "@/components/prompt-flipboard";
-import { colorForPlayer } from "@/lib/player";
+import { chipColorsForPlayer } from "@/lib/player";
 import { CopyRecapLink } from "./copy-recap-link";
 
 // Full-game recap page. Public — any link-holder can see the final standings
@@ -239,9 +239,13 @@ function RoundCard({
               <span>by</span>
               <span
                 className="player-chip h-5 w-5 text-[9px]"
-                style={{
-                  ["--chip-color" as string]: colorForPlayer(artist.player_id),
-                } as React.CSSProperties}
+                style={(() => {
+                  const c = chipColorsForPlayer(artist.player_id);
+                  return {
+                    ["--chip-color" as string]: c.bg,
+                    ["--chip-ink" as string]: c.ink,
+                  } as React.CSSProperties;
+                })()}
               >
                 {artist.display_name[0]?.toUpperCase()}
               </span>
@@ -311,9 +315,13 @@ function RoundCard({
                   </span>
                   <span
                     className="player-chip h-6 w-6 shrink-0 text-[10px]"
-                    style={{
-                      ["--chip-color" as string]: colorForPlayer(g.player_id),
-                    } as React.CSSProperties}
+                    style={(() => {
+                      const c = chipColorsForPlayer(g.player_id);
+                      return {
+                        ["--chip-color" as string]: c.bg,
+                        ["--chip-ink" as string]: c.ink,
+                      } as React.CSSProperties;
+                    })()}
                   >
                     {player?.display_name[0]?.toUpperCase() ?? "?"}
                   </span>
@@ -478,11 +486,13 @@ export default async function RecapPage({
                         >
                           <span
                             className="player-chip h-5 w-5 text-[10px]"
-                            style={{
-                              ["--chip-color" as string]: colorForPlayer(
-                                m.player_id,
-                              ),
-                            } as React.CSSProperties}
+                            style={(() => {
+                              const c = chipColorsForPlayer(m.player_id);
+                              return {
+                                ["--chip-color" as string]: c.bg,
+                                ["--chip-ink" as string]: c.ink,
+                              } as React.CSSProperties;
+                            })()}
                           >
                             {m.display_name[0]?.toUpperCase()}
                           </span>
@@ -519,9 +529,13 @@ export default async function RecapPage({
                     </span>
                     <span
                       className="player-chip w-10 h-10 shrink-0 text-sm"
-                      style={{
-                        ["--chip-color" as string]: colorForPlayer(p.player_id),
-                      } as React.CSSProperties}
+                      style={(() => {
+                        const c = chipColorsForPlayer(p.player_id);
+                        return {
+                          ["--chip-color" as string]: c.bg,
+                          ["--chip-ink" as string]: c.ink,
+                        } as React.CSSProperties;
+                      })()}
                     >
                       {p.display_name.slice(0, 2).toUpperCase()}
                     </span>
