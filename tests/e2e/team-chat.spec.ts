@@ -65,6 +65,14 @@ test("team chat: teammates see each other, the other team doesn't", async ({
   const secret = `team-one-secret-${stamp}`;
   const hostChatInput = host.locator('[data-chat-input="team"]');
   await hostChatInput.waitFor({ state: "visible", timeout: 10_000 });
+
+  // Regression for #57: team chat MUST work during generating/guessing.
+  // The lock banner "Room chat locked" would appear on the Room tab — prove
+  // we're actually in a blacked-out phase by asserting no unexpected errors
+  // and that the Team tab has no lock banner.
+  await expect(host.locator('[data-chat-error]')).toHaveCount(0);
+  await expect(host.getByText(/Room chat locked/)).toHaveCount(0);
+
   await hostChatInput.fill(secret);
   await host
     .locator('[data-chat-panel]')
@@ -73,6 +81,8 @@ test("team chat: teammates see each other, the other team doesn't", async ({
 
   // Teammate p3 should see it (on the Team tab, which is the default).
   await expect(p3.getByText(secret)).toBeVisible({ timeout: 10_000 });
+  // And no send error landed on the sender.
+  await expect(host.locator('[data-chat-error]')).toHaveCount(0);
 
   // Opponents p2 and p4 should NOT see it. Give broadcast + 2s poll headroom,
   // then assert the message is still missing in both their Team and Room
