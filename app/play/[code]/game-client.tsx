@@ -2108,6 +2108,7 @@ function ArtistPromptingView({
   const [prompt, setPrompt] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rejectCount, setRejectCount] = useState(0);
   const [autoSubmitFired, setAutoSubmitFired] = useState<boolean>(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // Keyed on round id so a per-round auto-submit only fires once. Keying on
@@ -2214,6 +2215,7 @@ function ArtistPromptingView({
           error?: string;
         };
         setError(body.detail || body.error || `Something went wrong (${res.status}).`);
+        setRejectCount((n) => n + 1);
         // Keep draft intact — user can tweak and retry.
         setSubmitting(false);
       }
@@ -2289,6 +2291,25 @@ function ArtistPromptingView({
             }}
             className="w-full flex flex-col gap-3"
           >
+            {error && (
+              <div
+                id="artist-prompt-error"
+                role="alert"
+                data-artist-error="1"
+                className="bg-red-500/20 border-2 border-red-500/50 rounded-xl px-4 py-3 text-base font-semibold"
+              >
+                <div className="text-red-600 font-black uppercase tracking-wider text-xs mb-1">
+                  ❌ Rejected — your draft is still here, tweak and resend
+                </div>
+                <div>{error}</div>
+                {rejectCount >= 2 && (
+                  <div className="mt-2 text-sm font-normal opacity-90">
+                    Stuck? Try a simpler subject — avoid celebrities, real
+                    people, or named characters.
+                  </div>
+                )}
+              </div>
+            )}
             <Textarea
               ref={textareaRef}
               value={prompt}
@@ -2315,16 +2336,6 @@ function ArtistPromptingView({
               <span>{prompt.length}/240</span>
               <span>Enter to send · Shift+Enter for newline</span>
             </div>
-            {error && (
-              <div
-                id="artist-prompt-error"
-                role="alert"
-                data-artist-error="1"
-                className="bg-red-500/15 border border-red-500/30 rounded-xl px-3 py-2 text-sm"
-              >
-                {error}
-              </div>
-            )}
             <Button
               type="submit"
               disabled={prompt.trim().length < 4 || !!tabooHit}
