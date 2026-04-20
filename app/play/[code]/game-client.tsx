@@ -59,6 +59,10 @@ type Player = {
   is_spectator?: boolean;
   score: number;
   team?: number | null;
+  // Server's team_prompting_roster() orders by joined_at (then player_id) —
+  // we need the same ordering on the client so the "active teammate"
+  // highlight matches the RPC's view of whose turn it is. (#58)
+  joined_at?: string | null;
 };
 
 const TEAM_META: Record<1 | 2, { label: string; color: string }> = {
@@ -301,7 +305,7 @@ function GameClientInner({
 
       const { data: ps } = await supabase
         .from("room_players")
-        .select("player_id, display_name, is_host, is_spectator, score, team")
+        .select("player_id, display_name, is_host, is_spectator, score, team, joined_at")
         .eq("room_id", room.id);
       if (ps) setPlayers(ps as Player[]);
 
@@ -371,6 +375,16 @@ function GameClientInner({
         .eq("room_id", room.id)
         .eq("round_num", room.round_num)
         .maybeSingle();
+      // Team-prompting columns (writing_team / turn_idx / turn_ends_at) live
+      // on the base `rounds` table — fetch them alongside so the watcher
+      // view doesn't flicker through an empty-roster state while the 2s poll
+      // backfills. (#58)
+      const { data: raw } = await supabase
+        .from("rounds")
+        .select("id, writing_team, turn_idx, turn_ends_at")
+        .eq("room_id", room.id)
+        .eq("round_num", room.round_num)
+        .maybeSingle();
       if (!cancel && data) {
         setCurrentRound((prev) => {
           if (prev && prev.id !== data.id) {
@@ -380,18 +394,23 @@ function GameClientInner({
             setSubmissionCount(0);
             setGuessesFromReveal([]);
           }
-          return data as Round;
+          return {
+            ...(data as Round),
+            writing_team: raw?.writing_team ?? null,
+            turn_idx: raw?.turn_idx ?? 0,
+            turn_ends_at: raw?.turn_ends_at ?? null,
+          };
         });
       } else if (!cancel) {
         // Fallback for artist mode: rounds_public may not reveal the artist
         // field if RLS is stricter. Fetch directly.
-        const { data: raw } = await supabase
+        const { data: rawFull } = await supabase
           .from("rounds")
-          .select("id, round_num, image_url, artist_player_id, taboo_words, ended_at, ai_took_over")
+          .select("id, round_num, image_url, artist_player_id, taboo_words, ended_at, ai_took_over, writing_team, turn_idx, turn_ends_at")
           .eq("room_id", room.id)
           .eq("round_num", room.round_num)
           .maybeSingle();
-        if (raw) setCurrentRound({ ...raw, prompt: null } as Round);
+        if (rawFull) setCurrentRound({ ...rawFull, prompt: null } as Round);
       }
     })();
     return () => {
@@ -1065,35 +1084,48 @@ function GameClientInner({
   }, [room.phase, room.teams_enabled, currentRound?.id]);
 
   // Auto-skip expired team turns. Host's tab drives this client-side (no
-  // pg_cron). The server's skip_team_turn RPC no-ops until turn_ends_at is
-  // genuinely in the past, so racing with the active player's submission
-  // just returns an error that we swallow.
+  // pg_cron). Poll once per second while the turn is overdue — the server's
+  // guard only accepts calls where turn_ends_at <= now() server-side, so
+  // clock skew between client and server can require a retry or two. (#58)
   useEffect(() => {
     if (room.phase !== "prompting") return;
     if (!room.teams_enabled) return;
     if (!isHost) return;
     if (!currentRound?.id) return;
     if (!currentRound.turn_ends_at) return;
+    const roundId = currentRound.id;
     const endsAt = new Date(currentRound.turn_ends_at).getTime();
-    const now = Date.now();
-    if (endsAt > now) return;
     const supabase = supabaseRef.current;
-    (async () => {
+    let cancelled = false;
+    let inflight = false;
+    const maybeSkip = async () => {
+      if (cancelled) return;
+      if (Date.now() < endsAt) return;
+      if (inflight) return;
+      inflight = true;
       try {
-        await supabase.rpc("skip_team_turn", { p_round_id: currentRound.id });
+        await supabase.rpc("skip_team_turn", { p_round_id: roundId });
       } catch {
-        // swallow — either the turn already advanced or the timer wasn't
-        // actually expired server-side (clock skew).
+        // swallow — the next tick will retry if still expired.
+      } finally {
+        inflight = false;
       }
-    })();
+    };
+    // Try once immediately (may be already-expired on mount) then retry every
+    // 1s until the effect is torn down by turn_ends_at advancing or the phase
+    // flipping to 'generating'.
+    maybeSkip();
+    const id = setInterval(maybeSkip, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [
     room.phase,
     room.teams_enabled,
     isHost,
     currentRound?.id,
     currentRound?.turn_ends_at,
-    // `remaining` keeps this effect alive as the countdown ticks.
-    remaining,
   ]);
 
   // Eligible voters = non-spectators, minus the artist on artist rounds.
@@ -2348,18 +2380,31 @@ function TeamPromptingView({
   const [error, setError] = useState<string | null>(null);
   const supabaseRef = useRef(createSupabaseBrowserClient());
 
-  // Writing-team roster in join order (stable). Each teammate goes once per
-  // pass; turn index wraps via `turn_idx % rosterSize`.
+  // Writing-team roster in join order. MUST match the server's
+  // team_prompting_roster() ordering (joined_at asc, player_id asc) so the
+  // client-side "active teammate" highlight agrees with submit_team_phrase's
+  // view of whose turn it is — otherwise turn_idx=0 highlights the wrong
+  // teammate and submits get rejected as "wait your turn". (#58)
   const writingTeam = currentRound?.writing_team ?? null;
   const roster = useMemo(() => {
     if (!writingTeam) return [] as Player[];
     return players
       .filter((p) => !p.is_spectator && p.team === writingTeam)
-      .sort((a, b) => a.display_name.localeCompare(b.display_name));
-    // NOTE: server-side ordering is by `joined_at`. We don't have that on the
-    // client Player type; stable alphabetical is a reasonable proxy for the
-    // UI highlight + the submit_team_phrase RPC is the source of truth on
-    // whose turn it actually is.
+      .sort((a, b) => {
+        // Primary: joined_at. Tiebreak: player_id (matches server's row_number
+        // ordering). Players without a joined_at fall to the end — this only
+        // happens on stale reads before the players-fetch completes.
+        const aJoined = a.joined_at ?? null;
+        const bJoined = b.joined_at ?? null;
+        if (aJoined && bJoined) {
+          if (aJoined !== bJoined) return aJoined < bJoined ? -1 : 1;
+        } else if (aJoined) {
+          return -1;
+        } else if (bJoined) {
+          return 1;
+        }
+        return a.player_id < b.player_id ? -1 : a.player_id > b.player_id ? 1 : 0;
+      });
   }, [players, writingTeam]);
 
   const passes = room.team_turn_passes ?? 1;
@@ -2376,8 +2421,35 @@ function TeamPromptingView({
 
   // Turn countdown uses rounds.turn_ends_at (per-turn, short) rather than
   // room.phase_ends_at (which mirrors the same value but survives between
-  // turns on the room clock).
+  // turns on the room clock). Called before the early-return below to keep
+  // the hook order stable across renders.
   const turnRemaining = useCountdown(currentRound?.turn_ends_at ?? null);
+
+  // Reset the draft as the turn advances so a stale teammate's text doesn't
+  // sit in the box for the next player. Also parked above the early-return.
+  useEffect(() => {
+    setDraft("");
+    setError(null);
+  }, [turnIdx]);
+
+  // Hold the render until writing_team has been resolved. Without this, the
+  // first paint shows `data-team-prompting="watcher"` for all four players
+  // (writing_team=null ⇒ iAmOnWritingTeam=false), and if a test locator
+  // (or a real user's quick glance) reads the role before the 2s poll
+  // backfills, the writing team never gets their form. (#58)
+  if (writingTeam === null) {
+    return (
+      <section
+        data-team-prompting="loading"
+        className="w-full max-w-xl flex flex-col items-center gap-4 py-12 text-center"
+      >
+        <p className="text-sm uppercase tracking-widest opacity-60">
+          Round {room.round_num}
+        </p>
+        <p className="opacity-80 text-sm">Picking the writing team…</p>
+      </section>
+    );
+  }
 
   async function submit() {
     if (!currentRound?.id) return;
@@ -2405,13 +2477,6 @@ function TeamPromptingView({
     setDraft("");
     setSubmitting(false);
   }
-
-  // Reset the draft as the turn advances so a stale teammate's text doesn't
-  // sit in the box for the next player.
-  useEffect(() => {
-    setDraft("");
-    setError(null);
-  }, [turnIdx]);
 
   // Non-writing view: opposing team + spectators wait. Don't leak phrases —
   // RLS already blocks the fetch, but hide the ghost list explicitly too.
