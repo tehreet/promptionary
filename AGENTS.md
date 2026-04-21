@@ -16,7 +16,7 @@ Two core modes + a teams overlay:
 - **Artist** — one player per round writes the prompt; everyone else guesses. Artist's score = average of the guessers' totals. Artist is picked by least-artist-count with random tiebreak (not join order).
 - **Teams** — a host-only lobby toggle (`rooms.teams_enabled` boolean, orthogonal to `mode`). Works on top of either Party or Artist. Players auto-seed into Team 1 / Team 2; host can swap or auto-balance. Final leaderboard ranks by **average** of each team's individual totals.
 
-Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, running scoreboard, inter-round chat (DB-level phase blackout), live cursors, emoji reactions, sound effects (submit / image-land / winner cheer), flipboard prompt recap with role-colored tokens + top-guess callout, host-only kick / transfer-host controls, solo Daily puzzle at `/daily` with global leaderboard and share card, sign-in (magic link + Google + Discord + passkeys via SimpleWebAuthn) — all shipped.
+Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, running scoreboard, always-on chat (room + team), live cursors, emoji reactions, sound effects (submit / image-land / winner cheer), flipboard prompt recap with role-colored tokens + top-guess callout, host-only kick / transfer-host controls, solo Daily puzzle at `/daily` with global leaderboard and share card, sign-in (magic link + Google + Discord + passkeys via SimpleWebAuthn) — all shipped.
 
 ## Tech stack
 
@@ -37,7 +37,7 @@ Spectator mode, invite links, play-again, auto-submit, auto-finalize, confetti, 
 - **Broadcast on public channels works fine.** Cursors, chat live-delivery, and reactions ride the `room-<id>-live` channel via `RoomChannelProvider`.
 - **Phase transitions are host-driven from the client.** No pg_cron. The host's tab POSTs to `/api/start-round` and `/api/finalize-round`. Auto-finalize fires when everyone submits (not just on timer expiry). Reveal-advance trigger guards on `phase_ends_at < now()` — not `remaining == 0` which is ambiguous.
 - **Replica identity FULL** on all gameplay tables for Realtime streaming. `supabase_realtime` publication includes rooms / room_players / rounds / guesses / room_messages.
-- **Chat has DB-level blackout:** `post_message` RPC + `room_messages` INSERT policy both reject non-spectator writes during `generating / guessing / scoring`.
+- **Chat is always open.** We tried a DB-level phase blackout during `generating / guessing / scoring` but it locked up inconsistently due to 2s poll jitter between phases. `post_message` RPC + `room_messages` INSERT policy now accept room-wide writes from any room member at any phase. Team chat is teammates-only, phase-agnostic.
 - **rounds_public view** hides the prompt until the round has `ended_at` or the room is in `reveal / game_over`. Clients read via the view; service-role writes to `rounds` directly.
 
 ## Key files

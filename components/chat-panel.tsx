@@ -54,11 +54,11 @@ export function ChatPanel({
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Room-wide chat is gated during active rounds for competing players.
-  // Team chat is open through every phase — it's the whole point.
-  const roomChatLocked =
-    !isSpectator && !["lobby", "reveal", "game_over"].includes(roomPhase);
-  const locked = tab === "room" && roomChatLocked;
+  // Chat is always open at every phase now — we tried the blackout but it
+  // locked up inconsistently due to 2s poll jitter between phases. Keeping
+  // `locked` as a constant false so the downstream code paths don't have
+  // to branch; remove when we're sure nothing reaches for it.
+  const locked = false;
 
   // Load history + poll for new messages every 2s as a backstop.
   useEffect(() => {
