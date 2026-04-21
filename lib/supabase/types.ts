@@ -433,6 +433,11 @@ export type Database = {
           pack: Database["public"]["Enums"]["room_pack"]
           phase: Database["public"]["Enums"]["room_phase"]
           phase_ends_at: string | null
+          prefetch_started_at: string | null
+          prefetched_image_storage_path: string | null
+          prefetched_image_url: string | null
+          prefetched_prompt: string | null
+          prefetched_tokens: Json | null
           reveal_seconds: number
           round_num: number
           skip_count: number
@@ -454,6 +459,11 @@ export type Database = {
           pack?: Database["public"]["Enums"]["room_pack"]
           phase?: Database["public"]["Enums"]["room_phase"]
           phase_ends_at?: string | null
+          prefetch_started_at?: string | null
+          prefetched_image_storage_path?: string | null
+          prefetched_image_url?: string | null
+          prefetched_prompt?: string | null
+          prefetched_tokens?: Json | null
           reveal_seconds?: number
           round_num?: number
           skip_count?: number
@@ -475,6 +485,11 @@ export type Database = {
           pack?: Database["public"]["Enums"]["room_pack"]
           phase?: Database["public"]["Enums"]["room_phase"]
           phase_ends_at?: string | null
+          prefetch_started_at?: string | null
+          prefetched_image_storage_path?: string | null
+          prefetched_image_url?: string | null
+          prefetched_prompt?: string | null
+          prefetched_tokens?: Json | null
           reveal_seconds?: number
           round_num?: number
           skip_count?: number

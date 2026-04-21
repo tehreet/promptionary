@@ -229,6 +229,7 @@ function GameClientInner({
   })();
   const generatingCalledRef = useRef<string | null>(null);
   const finalizeCalledRef = useRef<string | null>(null);
+  const prefetchCalledRef = useRef<string | null>(null);
   const revealAdvanceRef = useRef<string | null>(null);
   const autoSubmittedRef = useRef<string | null>(null);
   const roundNumRef = useRef<number>(room.round_num);
@@ -539,6 +540,53 @@ function GameClientInner({
     remaining,
     submissionCount,
     submissionTotal,
+    currentRound?.id,
+  ]);
+
+  // Speculative pre-generation of round N+1. While players are typing
+  // guesses in round N, the server sits idle on the Gemini side. Use that
+  // window to author + render the next prompt so /api/start-round for
+  // round N+1 becomes a ~1s phase flip instead of a 20-40s wait. Fires
+  // ~5s into guessing (past any 2s realtime-poll jitter), once per round,
+  // from any room member's tab. The endpoint is advisory-locked at the DB
+  // so parallel tabs don't duplicate work. Party mode only; skipped on the
+  // last round. Fire-and-forget — errors are logged but never surfaced.
+  //
+  // We also accept `scoring` as a late-trigger fallback: in fast games
+  // (mocked tests, hyper-active players) guessing can flip to scoring
+  // before the 5s delay elapses, so a guessing-only gate would miss the
+  // window. The endpoint itself gates on phase in ('guessing','scoring')
+  // so a late trigger still lands.
+  useEffect(() => {
+    if (room.phase !== "guessing" && room.phase !== "scoring") return;
+    if (room.mode !== "party") return;
+    if (room.round_num >= room.max_rounds) return;
+    if (!currentRound?.id) return;
+    if (prefetchCalledRef.current === currentRound.id) return;
+    // Short delay in guessing to let phase_ends_at propagate, fire
+    // immediately if we're already in scoring.
+    const delay = room.phase === "guessing" ? 3000 : 0;
+    const roundIdAtSchedule = currentRound.id;
+    const t = setTimeout(() => {
+      // Don't set the dedup ref until we actually fire — otherwise a
+      // phase flip mid-timer clears this timeout, the effect re-runs with
+      // the new phase, and the new run skips because the ref is already
+      // marked.
+      if (prefetchCalledRef.current === roundIdAtSchedule) return;
+      prefetchCalledRef.current = roundIdAtSchedule;
+      fetch("/api/prefetch-next-round", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room_id: room.id }),
+      }).catch((e) => console.error("[prefetch] trigger failed", e));
+    }, delay);
+    return () => clearTimeout(t);
+  }, [
+    room.phase,
+    room.mode,
+    room.round_num,
+    room.max_rounds,
+    room.id,
     currentRound?.id,
   ]);
 
