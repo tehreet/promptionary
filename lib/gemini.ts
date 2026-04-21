@@ -357,13 +357,41 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (MOCK_GEMINI) {
     return texts.map(mockEmbed);
   }
-  const out: number[][] = [];
-  for (const text of texts) {
+  if (texts.length === 0) return [];
+  // The @google/genai SDK's `embedContent` accepts `contents` as an array
+  // and returns `embeddings` in input order (see SDK docs comment in
+  // node_modules/@google/genai/dist/genai.d.ts around line 8025). That
+  // collapses N serial HTTP calls into ONE. For N=5 guesses + 1 prompt
+  // that's a ~5-6x reduction in finalize-round latency on embeds alone.
+  //
+  // If the batch call throws (unexpected API hiccup, payload-size cap,
+  // etc), fall back to Promise.all of individual calls — still parallel
+  // HTTP, still a big win over the old serial loop.
+  try {
     const res = await ai.models.embedContent({
       model: "gemini-embedding-001",
-      contents: text,
+      contents: texts,
     });
-    out.push(res.embeddings?.[0]?.values ?? []);
+    const out = (res.embeddings ?? []).map((e) => e.values ?? []);
+    // If the API didn't return one embedding per input, fall back to
+    // per-text to preserve the caller's index-alignment invariant.
+    if (out.length === texts.length) return out;
+    console.warn(
+      `[embedTexts] batch returned ${out.length} embeddings for ${texts.length} inputs; falling back to parallel per-text`,
+    );
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn(
+      `[embedTexts] batch failed (${message}); falling back to parallel per-text`,
+    );
   }
-  return out;
+  const results = await Promise.all(
+    texts.map((text) =>
+      ai.models.embedContent({
+        model: "gemini-embedding-001",
+        contents: text,
+      }),
+    ),
+  );
+  return results.map((res) => res.embeddings?.[0]?.values ?? []);
 }
