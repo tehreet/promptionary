@@ -1681,7 +1681,14 @@ function GameClientInner({
       {room.phase === "reveal" && (
         <section className="w-full max-w-2xl flex flex-col items-center gap-5">
           <p className="text-sm opacity-80">
-            Next round in <span className="font-mono font-black">{remaining}s</span>
+            {room.round_num >= room.max_rounds ? (
+              <>Loading leaderboard…</>
+            ) : (
+              <>
+                Next round in{" "}
+                <span className="font-mono font-black">{remaining}s</span>
+              </>
+            )}
           </p>
           <ReactionsBarWrapper />
 
