@@ -1,0 +1,61 @@
+## Conversation
+User said "i want to so ut show me how to do ir dor me" — garbled but
+clearly meant "I want to use it; show me how / do it for me", in
+reference to the commit-notes rule we just imported in this PR. They
+asked me to demonstrate the workflow on a real commit.
+
+I'm picking THIS commit (the rule-import itself) as the demo target so
+the first note in the repo is the meta one.
+
+## Actions
+- git log --oneline -1 main → 380d9f1
+- git notes add <sha> -m "<HEREDOC>" → this note
+- (next step) git push origin refs/notes/commits → push the note to remote
+  so future sessions can read it
+
+## Errors & Mistakes
+None on the note itself. Earlier in the session I forgot that `gh pr merge --auto`
+fails when run from inside a worktree (it tries to checkout main locally and
+collides with the parent worktree); the fix is `--repo tehreet/promptionary`
+or merging from the main tree. That's already documented in CLAUDE.md
+worktree-gotchas; reflagging here so the next agent doesn't waste cycles.
+
+## Dead Ends
+- Considered adding the note via `git notes append` to keep it editable but
+  `git notes add` on a fresh commit with no existing note is just simpler.
+- Briefly considered automating note creation via a post-commit hook. Rejected
+  for now — the rule says the note's *content* is the value (raw conversation,
+  actions, errors), so an auto-template hook that fills in `<TODO>` placeholders
+  would just produce ceremony with no signal. Manual is correct.
+
+## Hints for Future Agents
+- `git notes` are a separate ref (`refs/notes/commits`). They don't push or
+  fetch with normal `git push` / `git pull`. Use:
+    git push origin refs/notes/commits
+    git fetch origin refs/notes/*:refs/notes/*
+- To always show notes in `git log`, set:
+    git config --global notes.displayRef refs/notes/commits
+  (or pass `--show-notes` on demand).
+- `git log --show-notes` shows every commit's note inline. Without that flag
+  you'll think notes are missing.
+- Notes attach to the *commit SHA*, so a rebase / squash-merge orphans them.
+  Add notes AFTER the squash-merge lands on main, not before, otherwise the
+  note follows the original branch commit which gets garbage-collected.
+
+## Codebase Discoveries
+- AGENTS.md uses Claude Code's @-import syntax (e.g. `@rules/simple.md`) and
+  CLAUDE.md just contains `@AGENTS.md`. So we have a 2-hop import chain:
+  CLAUDE.md → AGENTS.md → rules/*.md. Load is automatic per session.
+- The repo has 30+ stale agent worktrees under `.claude/worktrees/`. `git
+  worktree list` shows them all locked. They accumulated from each agent
+  dispatch; nothing prunes them. Worth a sweep at some point but not urgent.
+
+## Open Questions
+- Should we auto-fetch notes on session start? Currently a fresh clone won't
+  see them by default. Options: a setup script, a documented one-liner in
+  AGENTS.md, or just rely on agents reading `rules/commit-notes.md` and
+  running the fetch themselves.
+- Squash-merge interaction: the squash commit on main has a different SHA
+  than the branch commits. We should adopt a convention of "note the squash
+  commit on main, not the branch", and document it. Will revise rules/commit-notes.md
+  if it becomes a recurring trip-up.
