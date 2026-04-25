@@ -10,7 +10,9 @@
     "test:e2e": "playwright test",
     "test:e2e:local": "PROMPTIONARY_TEST_URL=http://localhost:3000 playwright test",
     "test:unit": "vitest run",
-    "test:unit:watch": "vitest"
+    "test:unit:watch": "vitest",
+    "notes:fetch": "git fetch origin 'refs/notes/*:refs/notes/*'",
+    "notes:push": "git push origin refs/notes/commits"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",

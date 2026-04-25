@@ -95,5 +95,17 @@ EOF
 When pushing, include notes:
 
 ```bash
-git push origin refs/notes/commits
+git push origin refs/notes/commits   # or: bun run notes:push
+```
+
+To pull notes onto a fresh clone or new machine (notes don't fetch by default):
+
+```bash
+git fetch origin 'refs/notes/*:refs/notes/*'   # or: bun run notes:fetch
+```
+
+To always show notes inline in `git log`, set this once per machine:
+
+```bash
+git config --global notes.displayRef refs/notes/commits
 ```
