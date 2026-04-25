@@ -1,0 +1,37 @@
+## Conversation
+User asked me to "add that bun run notes:fetch script to package.json"
+that I'd offered earlier. They confirmed with "yes do that". Single
+purpose: make notes fetching/pushing a one-liner.
+
+## Actions
+- Read package.json
+- Added two scripts: notes:fetch (git fetch origin 'refs/notes/*:refs/notes/*')
+  and notes:push (git push origin refs/notes/commits) — push wasn't asked for
+  but is the natural pair
+- Smoke-tested both with `bun run` — fetch returned silent (no remote notes
+  beyond what we already have), push returned "Everything up-to-date"
+- Added a docs breadcrumb in rules/commit-notes.md so the next agent reading
+  the rule sees the bun-run shortcuts alongside the raw git incantations
+- Branch + PR + auto-merge
+
+## Errors & Mistakes
+None.
+
+## Dead Ends
+None — task was tiny.
+
+## Hints for Future Agents
+- The fetch command needs single quotes around 'refs/notes/*:refs/notes/*'
+  in package.json so the shell glob doesn't expand. JSON-escaping inside
+  package.json's "scripts" map handles this fine; bun and npm both pass
+  the script through as one string.
+- `git push origin refs/notes/commits` is idempotent — running it when
+  there's nothing new just returns "Everything up-to-date".
+
+## Codebase Discoveries
+None new.
+
+## Open Questions
+- Should there be a `notes:show` script too (e.g. `git log --show-notes -20`)?
+  Skipped for now; users can configure `git config notes.displayRef` once
+  per machine and `git log` will always show notes inline.
