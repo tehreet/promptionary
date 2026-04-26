@@ -192,9 +192,9 @@ function parseArgs(): Args {
   let n = 10;
   let site = "https://promptionary.io";
   let cursors = true;
-  let cursorHz = 20;
+  let cursorHz = 60;
   let chat = true;
-  let chatIntervalMs = 8000;
+  let chatIntervalMs = 45_000;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--n" || a === "-n") {
@@ -206,7 +206,7 @@ function parseArgs(): Args {
     } else if (a === "--cursors") {
       cursors = true;
     } else if (a === "--cursor-hz") {
-      cursorHz = parseInt(argv[++i] ?? "20", 10);
+      cursorHz = parseInt(argv[++i] ?? "60", 10);
     } else if (a === "--no-chat") {
       chat = false;
     } else if (a === "--chat") {
@@ -214,7 +214,7 @@ function parseArgs(): Args {
     } else if (a === "--chat-interval") {
       // Mean per-bot interval in ms between messages. Each bot jitters ±50%
       // around this so 10 bots don't all post on the same tick.
-      chatIntervalMs = parseInt(argv[++i] ?? "8000", 10);
+      chatIntervalMs = parseInt(argv[++i] ?? "45000", 10);
     } else if (!code) {
       code = a;
     }
@@ -246,14 +246,6 @@ function colorForBot(id: string): string {
   return `hsl(${hue} 80% 65%)`;
 }
 
-function seedFromId(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) {
-    h = (h * 31 + id.charCodeAt(i)) & 0xffffffff;
-  }
-  return Math.abs(h);
-}
-
 interface BotState {
   name: string;
   client: SupabaseClient;
@@ -269,9 +261,27 @@ async function joinAsBot(code: string, name: string): Promise<BotState> {
   const client = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: auth, error: authErr } = await client.auth.signInAnonymously();
-  if (authErr || !auth.session || !auth.user) {
-    throw new Error(`[${name}] sign-in failed: ${authErr?.message}`);
+  // Retry signInAnonymously on Supabase's "Request rate limit reached".
+  // Free-tier anon auth caps requests/sec; the staggered launch in main()
+  // helps but a single 429 burst can still happen if a previous batch is
+  // still cooling down.
+  let auth: Awaited<ReturnType<typeof client.auth.signInAnonymously>>["data"] | null = null;
+  let lastErr: { message?: string } | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await client.auth.signInAnonymously();
+    if (res.data?.session && res.data?.user) {
+      auth = res.data;
+      lastErr = null;
+      break;
+    }
+    lastErr = res.error;
+    if (!res.error?.message?.toLowerCase().includes("rate limit")) break;
+    // Exponential backoff with jitter: 1.5s, 3.5s, 7s
+    const wait = 1500 * Math.pow(2, attempt) + Math.random() * 1000;
+    await sleep(wait);
+  }
+  if (!auth?.session || !auth?.user) {
+    throw new Error(`[${name}] sign-in failed: ${lastErr?.message}`);
   }
   const { data: roomId, error: joinErr } = await client.rpc(
     "join_room_by_code",
@@ -354,21 +364,32 @@ async function startBotRealtime(
   let cursorInterval: ReturnType<typeof setInterval> | null = null;
   if (opts.cursors) {
     const color = colorForBot(bot.playerId);
-    const seed = seedFromId(bot.playerId);
-    const phaseX = (seed % 6283) / 1000;
-    const phaseY = ((seed >> 4) % 6283) / 1000;
-    const freqX = 0.0007 + (seed % 5) * 0.00005;
-    const freqY = 0.0011 + ((seed >> 3) % 7) * 0.00005;
-    const cx = 640;
-    const cy = 360;
-    const ax = 520;
-    const ay = 300;
+    // Cover roughly a 1600x900 viewport — wider than typical 1280x720 so
+    // cursors hit the edges, headers, sidebars, not just the center.
+    const VW = 1600;
+    const VH = 900;
+    const randX = () => Math.random() * VW;
+    const randY = () => Math.random() * VH;
+    let curX = randX();
+    let curY = randY();
+    let tgtX = randX();
+    let tgtY = randY();
+    let nextRetargetAt = Date.now() + 600 + Math.random() * 1400;
+    // Per-tick easing — fraction of remaining distance to close each frame.
+    // 0.06 at 60Hz converges in ~30 frames (~500ms), which feels lively but
+    // not jerky. Lower this for more momentum, higher for snappier motion.
+    const easing = 0.06;
     const intervalMs = Math.max(16, Math.floor(1000 / Math.max(1, opts.cursorHz)));
-    const t0 = Date.now();
     cursorInterval = setInterval(() => {
-      const t = Date.now() - t0;
-      const x = Math.round(cx + ax * Math.sin(t * freqX + phaseX));
-      const y = Math.round(cy + ay * Math.sin(t * freqY + phaseY));
+      // Re-pick a random target periodically so the cursor wanders across
+      // the whole page instead of orbiting one spot.
+      if (Date.now() >= nextRetargetAt) {
+        tgtX = randX();
+        tgtY = randY();
+        nextRetargetAt = Date.now() + 600 + Math.random() * 1400;
+      }
+      curX += (tgtX - curX) * easing;
+      curY += (tgtY - curY) * easing;
       void channel.send({
         type: "broadcast",
         event: "cursor",
@@ -376,8 +397,8 @@ async function startBotRealtime(
           id: bot.playerId,
           name: bot.name,
           color,
-          x,
-          y,
+          x: Math.round(curX),
+          y: Math.round(curY),
         },
       });
     }, intervalMs);
@@ -575,16 +596,21 @@ async function main() {
     });
     setTimeout(() => process.exit(0), 1500);
   });
+  // Stagger sign-ins by 400ms each. Supabase's free-tier anon-auth limit
+  // trips when 10 parallel signInAnonymously calls land in the same second
+  // (AGENTS.md flags this for >3 parallel workers). Spreading them over
+  // ~4s keeps everyone under the threshold; bots run concurrently after.
   await Promise.all(
-    names.map((name) =>
-      runBot(
+    names.map(async (name, i) => {
+      await sleep(i * 400);
+      return runBot(
         code,
         name,
         site,
         { cursors, cursorHz, chat, chatIntervalMs },
         stopFns,
-      ),
-    ),
+      );
+    }),
   );
 }
 

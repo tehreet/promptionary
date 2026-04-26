@@ -49,3 +49,20 @@ playwright-report/
 # Claude Code session scratch / worktrees
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+.claude/settings.local.json
+
+# Greenhouse / overstory daemon runtime state (not config)
+.greenhouse/state.jsonl
+.greenhouse/state.jsonl.bak
+.greenhouse/daemon.pid
+.greenhouse/daemon.log
+.overstory/agents/
+.overstory/worktrees/
+.overstory/specs/
+.overstory/logs/
+.overstory/sessions.db*
+.overstory/session-branch.txt
+.overstory/.claude/
+.mulch/expertise/.lock
+.canopy/.lock
+.seeds/.lock
