@@ -1,0 +1,52 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+"irox has had to submit a prompt twice now and it keeps timing out and
+making him redo it" — bug live on JCZH.
+
+## Actions
+- Ran `mcp__plugin_vercel_vercel__get_runtime_logs` and found 3
+  consecutive 502s from `/api/submit-artist-prompt` at 21:47/21:48/21:49,
+  all `[submit-artist-prompt] gemini failed`. Image-gen safety filter
+  rejecting prompts (Darth Vader-type real-character cases).
+- `submit-artist-prompt` was flipping phase to 'generating' BEFORE
+  running moderation. Each Gemini-rejected prompt cost 20-40s in the
+  "AI is painting" spinner + a phase rollback to 'prompting'. From
+  user's POV the timer kept "expiring".
+- Moved moderation BEFORE the RPC. Safety rejects now return instantly
+  with no phase churn, no timer interruption.
+- Removed the now-dead post-RPC moderation block.
+- Lifted error banner above textarea, made it bigger (`bg-red-500/20
+  border-2`), prefixed with "❌ Rejected — your draft is still here,
+  tweak and resend".
+- Added `rejectCount` state; after 2+ rejections, shows nudge: "Try a
+  simpler subject — avoid celebrities, real people, or named characters."
+
+## Errors & Mistakes
+None.
+
+## Dead Ends
+- Considered NOT flipping phase to 'generating' until image gen
+  succeeds (cleaner state machine). Rejected as too invasive — the
+  moderation reorder is the surgical fix.
+- Considered showing a per-rejection-type tailored nudge (e.g.
+  "Avoid real people" for HARASSMENT). Skipped — Gemini's image safety
+  filter is opaque, doesn't tell us which category fired. The generic
+  nudge is honest.
+
+## Hints for Future Agents
+- moderatePrompt() catches some prompts but Gemini's IMAGE-GEN model
+  has its own independent safety filter. A prompt can pass moderation
+  and still fail image gen. We can't predict that without calling
+  image gen. Roll-back-on-fail is the only real path.
+- Don't trust the timer-expiry framing in user reports. Slow API +
+  rollback can FEEL like a timer expiring. Always check runtime logs.
+
+## Codebase Discoveries
+- Server returns `{ error, detail }` on failures; client surfaces
+  `body.detail || body.error || 'Something went wrong (...)'`. The
+  detail is what users actually read — keep it human and actionable.
+
+## Open Questions
+- Imagen 4 Fast (filed as #79) might have a different safety threshold.
+  Worth checking when we A/B that model.
