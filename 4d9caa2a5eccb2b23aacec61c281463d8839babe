@@ -1,0 +1,64 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+User asked "HOW CAN WE SPEED UP GENERATING AN IMAGE?" — wanted deep
+analysis. After analysis, picked ideas #1 (speculative pre-gen) and
+#5 (batch embeddings) to ship.
+
+## Actions
+- Migration 20260421010000_round_prefetch.sql: added `prefetched_prompt`,
+  `prefetched_image_storage_path`, `prefetched_image_url`,
+  `prefetched_tokens` (jsonb), `prefetch_started_at` columns to rooms.
+  Cleared on play_again, pack change, mode change.
+- New endpoint `/api/prefetch-next-round`: best-effort, advisory-locked,
+  releases lock on every failure path.
+- `/api/start-round`: consume fast path. Copies prefetch image into
+  canonical `${room}/${round}.png` slot, falls through to full Gemini
+  path when cache empty.
+- `game-client.tsx`: fire-and-forget trigger 3s into 'guessing' (and
+  immediately on 'scoring' as fast-game fallback), keyed per round id.
+- `lib/gemini.ts::embedTexts`: batched into one request via array
+  `contents`; Promise.all fallback if response shape unexpected.
+- `tests/e2e/prefetch-next-round.spec.ts` end-to-end green in mock mode.
+
+## Errors & Mistakes
+- Initial migration accidentally shadowed the live 8-arg
+  `update_room_settings` (carries `p_blitz`/`p_taboo_enabled`) with a
+  6-arg variant. Named-arg calls from the browser hit the wrong overload
+  and `maxRounds` from lobby silently didn't apply. Caused multi-round
+  spec to run 5 rounds with no submissions. Manually dropped the stray
+  6-arg function from prod and kept the 8-arg shape, added prefetch-clear
+  on mode/pack changes.
+
+## Dead Ends
+- Considered prefetching during the `reveal` phase (10-15s window).
+  Rejected — image gen takes 20-40s, doesn't fit. `guessing` phase
+  (45-60s) gives plenty of runway.
+- Considered NOT clearing the prefetch lock until consume — would let
+  the lock persist across the failure-then-retry case. Rejected: lock
+  release on failure is more robust than relying on the 120s timeout.
+
+## Hints for Future Agents
+- Spectator modifiers TRADE-OFF: picked at consume time and badged on
+  the reveal, but the pre-baked image is NOT regenerated to visually
+  apply them. Documented in code comments at both
+  /api/start-round and /api/prefetch-next-round.
+- The advisory lock is `prefetch_started_at < now() - interval '120s'`
+  treated as expired. Don't loop the trigger faster than that.
+- Round 1 is NOT prefetched (no prior round). Artist mode is NEVER
+  prefetched. Last round is NOT prefetched. Each is correct.
+- Real-Gemini timing: round 2+ start-round drops from ~20-40s to ~1.5s.
+  ~2 minutes shaved off a 5-round party-mode game.
+
+## Codebase Discoveries
+- `update_room_settings` RPC has 8 named args (p_max_rounds,
+  p_guess_seconds, p_reveal_seconds, p_mode, p_pack, p_blitz,
+  p_taboo_enabled, p_room_id). Don't ship a smaller-arg overload —
+  Postgres function dispatch by name will pick the wrong one and
+  silently drop args.
+- `@google/genai`'s embedContent accepts `contents: string[]` and
+  returns embeddings in input order. Saves N-1 round trips.
+
+## Open Questions
+- Filed #79 (Imagen 4 Fast), #80 (lower-res first paint), #81
+  (parallelize role-tagging) as follow-ups.
