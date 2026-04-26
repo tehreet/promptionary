@@ -1388,7 +1388,7 @@ function GameClientInner({
               ))}
             </div>
           )}
-          <ul className="flex gap-3 overflow-x-auto pb-2 justify-start sm:justify-center">
+          <ul className="flex gap-2.5 overflow-x-auto overflow-y-hidden pb-3 px-0.5 justify-start sm:justify-center">
             {leaderboard.map((p, i) => {
               const teamColor =
                 isTeams && (p.team === 1 || p.team === 2)
@@ -1398,18 +1398,18 @@ function GameClientInner({
                 <li
                   key={p.player_id}
                   data-team={p.team ?? undefined}
-                  className="game-card bg-[var(--game-paper)] flex items-center gap-2 px-3 py-2 shrink-0"
+                  className="game-card bg-[var(--game-paper)] flex items-center gap-2.5 px-3.5 py-2.5 shrink-0"
                   style={
                     teamColor
                       ? ({ ["--team-accent" as string]: teamColor, outline: `2px solid ${teamColor}` } as React.CSSProperties)
                       : undefined
                   }
                 >
-                  <span className="text-xs opacity-60 font-black w-4 text-right text-[var(--game-ink)]">
+                  <span className="text-[11px] opacity-70 font-black w-5 text-right tabular-nums text-[var(--game-ink)]">
                     {i + 1}
                   </span>
                   <span
-                    className="player-chip w-8 h-8 text-xs"
+                    className="player-chip w-8 h-8 text-[11px]"
                     style={(() => {
                       const c = chipColorsForPlayer(p.player_id);
                       return {
@@ -1420,10 +1420,10 @@ function GameClientInner({
                   >
                     {p.display_name[0]?.toUpperCase()}
                   </span>
-                  <span className="font-heading font-bold text-sm text-[var(--game-ink)] truncate max-w-[8rem]">
+                  <span className="font-heading font-bold text-sm text-[var(--game-ink)] truncate max-w-[7rem]">
                     {p.display_name}
                   </span>
-                  <span className="font-mono font-black text-sm text-[var(--game-ink)]">
+                  <span className="font-mono font-black text-sm tabular-nums text-[var(--game-ink)]">
                     {p.score}
                   </span>
                   {isHost && p.player_id !== currentPlayerId && (
@@ -1997,10 +1997,12 @@ function LeaderboardRow({
   const isWinner = rank === 1;
   return (
     <li
-      className="game-card bg-[var(--game-paper)] flex items-center gap-3 px-4 py-3 text-[var(--game-ink)]"
+      className="game-card bg-[var(--game-paper)] flex items-center gap-3 px-4 py-3.5 text-[var(--game-ink)]"
       style={isWinner ? { transform: "rotate(2deg)" } : undefined}
     >
-      <span className="w-6 text-center font-black opacity-70">{rank}</span>
+      <span className="w-6 text-center font-black text-sm tabular-nums opacity-70">
+        {rank}
+      </span>
       <span
         className="player-chip w-10 h-10 shrink-0 text-sm"
         style={(() => {
@@ -2013,7 +2015,7 @@ function LeaderboardRow({
       >
         {player.display_name.slice(0, 2).toUpperCase()}
       </span>
-      <span className="flex-1 font-heading font-bold truncate text-[var(--game-ink)]">
+      <span className="flex-1 font-heading font-bold truncate text-sm sm:text-base text-[var(--game-ink)]">
         {player.display_name}
       </span>
       {isWinner ? (

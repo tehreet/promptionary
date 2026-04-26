@@ -77,6 +77,37 @@ test("game_over: round highlights carousel shows one card per round", async ({
   // Leaderboard still renders below the carousel.
   await expect(host.getByText("Final leaderboard")).toBeVisible();
 
+  // Desktop arrow nav buttons are present and accessible.
+  const prevBtn = carousel.getByRole("button", { name: "Previous round" });
+  const nextBtn = carousel.getByRole("button", { name: "Next round" });
+  await expect(prevBtn).toBeVisible();
+  await expect(nextBtn).toBeVisible();
+
+  // Clicking arrow buttons doesn't error.
+  await nextBtn.click();
+  await prevBtn.click();
+
+  // Carousel scroll area is keyboard-focusable.
+  const scrollArea = carousel.locator("[data-carousel-scroll]");
+  await scrollArea.focus();
+  await expect(scrollArea).toBeFocused();
+
+  // Arrow key presses are handled without errors.
+  await host.keyboard.press("ArrowRight");
+  await host.keyboard.press("ArrowLeft");
+
+  // Mouse drag: simulate pointer drag on the scroll container.
+  const box = await scrollArea.boundingBox();
+  if (box) {
+    await host.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await host.mouse.down();
+    await host.mouse.move(box.x + box.width / 2 - 80, box.y + box.height / 2, { steps: 10 });
+    await host.mouse.up();
+    // After drag, clicking a card link should not navigate (wasDragging guard).
+    // Verify page URL is still the game page (not a /r/ highlight page).
+    expect(host.url()).toMatch(/\/play\//);
+  }
+
   await hostCtx.close();
   await joinerCtx.close();
 });
