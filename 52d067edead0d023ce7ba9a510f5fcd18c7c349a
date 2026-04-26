@@ -1,0 +1,33 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+Bug live on JCZH — bots ghosted artist role with host backgrounded; round
+stuck in 'prompting' forever. Same failure mode as the old finalize-round
+host-only stall.
+
+## Actions
+- `/api/artist-gave-up`: replaced `room.host_id !== user.id` 403 with
+  "any room member" check (mirrors finalize-round pattern).
+- game-client.tsx: dropped `if (!isHost) return` from the artist-gave-up
+  effect.
+
+## Errors & Mistakes
+None.
+
+## Dead Ends
+None.
+
+## Hints for Future Agents
+- The route is already idempotent: it flips phase to 'generating' BEFORE
+  the Gemini call, and every concurrent caller 409s at the phase guard.
+  That's the correctness story — the host-only check was just waste
+  prevention, which idempotency already provides.
+
+## Codebase Discoveries
+- This is the third "host-tab-stalls-the-room" bug we've fixed (after
+  finalize-round and the original artist-gave-up shipping). Pattern:
+  any route that's the only path out of a phase MUST be triggerable by
+  any room member, not just the host.
+
+## Open Questions
+- Are there other phases gated only on the host's tab? Worth a sweep.
