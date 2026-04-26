@@ -1,0 +1,40 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+"the chat locks up randomly inbetween rounds and doesnt let you send
+messages half the time. just enable the chat for now at all times"
+
+## Actions
+- Removed phase-blackout entirely from `post_message` RPC. Any room
+  member can post any phase. Spectator/team validation unchanged.
+- Removed phase gate from `room_messages_insert` policy branch (b);
+  now room-wide writes are accepted any phase.
+- Client `chat-panel.tsx`: hard-coded `locked = false`. Banner + disabled
+  input paths never fire.
+- AGENTS.md updated: dropped "DB-level blackout" claim; added "Chat is
+  always open" with rationale.
+- Migration 20260421000000_chat_always_open.sql, applied to prod via
+  `supabase db push`.
+
+## Errors & Mistakes
+None.
+
+## Dead Ends
+- PR #67 had tightened the team-vs-room-vs-spectator branch logic
+  thinking jitter was the root. Turned out the simpler answer was
+  "remove the gate entirely" — phase poll lag of 2s made the gate
+  fundamentally racy.
+
+## Hints for Future Agents
+- The `roomPhase` and `isSpectator` props on ChatPanel are now unused
+  but kept in the interface for back-compat with callers. Safe to
+  remove later if the codebase is touched.
+- Team chat is unchanged: teammates only, spectators rejected.
+
+## Codebase Discoveries
+- The 2s polling fallback that backstops realtime broadcasts was the
+  hidden source of phase-vs-DB drift. Anything else that races against
+  the room phase will have the same problem.
+
+## Open Questions
+None.
