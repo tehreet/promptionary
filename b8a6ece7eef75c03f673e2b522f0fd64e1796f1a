@@ -1,0 +1,35 @@
+## Conversation
+Issue #94: Three related UI polish items on the round-end / game_over view.
+1. Round highlights carousel text box looks rough (padding/contrast).
+2. Player rail (running scoreboard + LeaderboardRow) rough vibe.
+3. Carousel has no desktop swipe — only touch events.
+
+Task assigned via overstory dispatch; details from `sd show promptionary-2d65`.
+
+## Actions
+- Read round-highlights-carousel.tsx, game-client.tsx (L1300-1450, L1720-1800, L1950-2030), highlights-carousel.spec.ts, globals.css (game token + player-chip CSS definitions)
+- Identified: early return null before hooks was the main bug — moved it after all hooks to satisfy rules-of-hooks
+- Implemented pointer-event drag (skipping touch so native mobile scroll is preserved), capture-phase click guard (wasDragging ref prevents Link navigation after drag), arrow buttons (hidden sm:flex, only when highlights.length > 1), keyboard ArrowLeft/ArrowRight on tabIndex=0 scroll container
+- Player rail: tightened gap/padding values for more visual polish, added tabular-nums to rank, overflow-y-hidden to prevent shadow clipping
+- LeaderboardRow: minor padding bump + responsive text-sm sm:text-base on display_name
+- Extended e2e test: arrow button presence, keyboard focus, ArrowRight/Left, mouse drag smoke test (URL check after drag proves click guard works)
+
+## Errors & Mistakes
+- First draft had `if (highlights.length === 0) return null;` before useRef/useState hooks — caught by ESLint rules-of-hooks. Fixed by moving hooks to top of function body and null check after all hooks.
+- No other errors; build, lint (on our files), and unit tests all clean.
+
+## Dead Ends
+- Considered using cursor-grab on mobile but mobile layout is flex-col (vertical stacking) so cursor change would be confusing. Used sm:cursor-grab to restrict to desktop breakpoint.
+- Considered testing scroll pixel position for arrow nav but 2 cards at 320px fit within 1280px viewport without overflow, so scroll would be 0. Used existence + click + keyboard tests instead.
+
+## Hints for Future Agents
+- The onClickCapture approach (capture phase, stop propagation on container) is the correct way to prevent Link navigation after a drag. React's synthetic capture fires before children's bubble. wasDragging ref is a non-state ref to avoid re-renders.
+- e.pointerType === "touch" guard is critical — removing it would break native mobile scroll (setPointerCapture grabs all touch events).
+- The always-cream prompt box uses style={{ color: "var(--game-canvas-dark)", borderColor: "var(--game-canvas-dark)" }} intentionally — --game-ink flips to cream in dark mode (see #70), so inline style pinning to --game-canvas-dark (always dark) is the correct approach. Don't replace with className.
+
+## Codebase Discoveries
+- globals.css defines .game-card with box-shadow: 4px 4px 0 var(--game-ink) — containers with overflow need pb-3+ to avoid clipping this shadow.
+- RoundHighlightsCarousel already had sm:snap-x sm:snap-mandatory for CSS snapping on desktop — pointer drag supplements it (will still snap at card boundaries).
+
+## Open Questions
+- Mobile swipe not tested (task says "Mobile not yet tested"). The touch guard preserves native behavior; mobile column layout means horizontal swipe isn't applicable in current design.
