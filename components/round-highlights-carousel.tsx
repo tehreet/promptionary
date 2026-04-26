@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { chipColorsForPlayer } from "@/lib/player";
 import type { PromptToken, TokenRole } from "@/components/prompt-flipboard";
@@ -34,6 +35,9 @@ const ROLE_UNDERLINE: Record<TokenRole, string> = {
   filler: "role-filler-underline",
 };
 
+// 320px card + 16px gap-4
+const CARD_STEP = 336;
+
 export function RoundHighlightsCarousel({
   highlights,
   players,
@@ -41,25 +45,114 @@ export function RoundHighlightsCarousel({
   highlights: RoundHighlight[];
   players: HighlightPlayer[];
 }) {
-  if (highlights.length === 0) return null;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ x: number; scrollLeft: number } | null>(null);
+  const wasDragging = useRef(false);
+  const [grabbing, setGrabbing] = useState(false);
 
   const playerById = new Map(players.map((p) => [p.player_id, p]));
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Let touch events fall through to native scroll
+      if (e.pointerType === "touch") return;
+      if (!scrollRef.current) return;
+      dragRef.current = {
+        x: e.clientX,
+        scrollLeft: scrollRef.current.scrollLeft,
+      };
+      wasDragging.current = false;
+      setGrabbing(true);
+      scrollRef.current.setPointerCapture(e.pointerId);
+    },
+    [],
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragRef.current || !scrollRef.current) return;
+      const dx = e.clientX - dragRef.current.x;
+      if (Math.abs(dx) > 5) wasDragging.current = true;
+      scrollRef.current.scrollLeft = dragRef.current.scrollLeft - dx;
+    },
+    [],
+  );
+
+  const onPointerUp = useCallback(() => {
+    dragRef.current = null;
+    setGrabbing(false);
+  }, []);
+
+  // Intercept click before it reaches child <Link> elements when the user dragged
+  const onClickCapture = useCallback((e: React.MouseEvent) => {
+    if (wasDragging.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      wasDragging.current = false;
+    }
+  }, []);
+
+  const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      scrollRef.current?.scrollBy({ left: -CARD_STEP, behavior: "smooth" });
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      scrollRef.current?.scrollBy({ left: CARD_STEP, behavior: "smooth" });
+    }
+  }, []);
+
+  const scrollByCard = useCallback((dir: -1 | 1) => {
+    scrollRef.current?.scrollBy({ left: dir * CARD_STEP, behavior: "smooth" });
+  }, []);
+
+  if (highlights.length === 0) return null;
 
   return (
     <section
       data-highlights-carousel="1"
       className="w-full max-w-5xl flex flex-col gap-3"
     >
-      <div className="flex items-baseline justify-between px-1">
+      <div className="flex items-center justify-between px-1">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
           Round highlights
         </p>
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground opacity-70 hidden sm:block">
-          Scroll or swipe to relive every round
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground opacity-70 hidden sm:block">
+            Swipe or drag to browse
+          </p>
+          {highlights.length > 1 && (
+            <div className="hidden sm:flex items-center gap-1">
+              <button
+                onClick={() => scrollByCard(-1)}
+                aria-label="Previous round"
+                className="w-7 h-7 rounded-full border-2 border-[var(--game-ink)] bg-[var(--game-paper)] text-[var(--game-ink)] flex items-center justify-center text-lg leading-none hover:bg-[var(--game-ink)] hover:text-[var(--game-cream)] transition-colors"
+              >
+                ‹
+              </button>
+              <button
+                onClick={() => scrollByCard(1)}
+                aria-label="Next round"
+                className="w-7 h-7 rounded-full border-2 border-[var(--game-ink)] bg-[var(--game-paper)] text-[var(--game-ink)] flex items-center justify-center text-lg leading-none hover:bg-[var(--game-ink)] hover:text-[var(--game-cream)] transition-colors"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <div
-        className="flex gap-4 overflow-x-auto sm:snap-x sm:snap-mandatory flex-col sm:flex-row sm:pb-3 pb-0 -mx-6 sm:mx-0 sm:px-6 px-0"
+        ref={scrollRef}
+        tabIndex={0}
+        aria-label="Round highlights carousel"
+        data-carousel-scroll="1"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onClickCapture={onClickCapture}
+        onKeyDown={onKeyDown}
+        className={`flex gap-4 overflow-x-auto sm:snap-x sm:snap-mandatory flex-col sm:flex-row sm:pb-3 pb-0 -mx-6 sm:mx-0 sm:px-6 px-0 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--game-pink)]/60 focus-visible:rounded-lg ${grabbing ? "sm:cursor-grabbing" : "sm:cursor-grab"}`}
       >
         {highlights.map((h) => (
           <HighlightCard
@@ -94,7 +187,7 @@ function HighlightCard({
     <Link
       href={`/r/${highlight.round_id}`}
       data-highlight-card={highlight.round_num}
-      className="game-card bg-[var(--game-paper)] text-[var(--game-ink)] shrink-0 sm:w-[320px] w-full sm:snap-start p-3 flex flex-col gap-3 no-underline focus:outline-none focus:ring-4 focus:ring-[color:var(--game-cyan)]/50"
+      className="game-card bg-[var(--game-paper)] text-[var(--game-ink)] shrink-0 sm:w-[320px] w-full sm:snap-start p-4 flex flex-col gap-3 no-underline focus:outline-none focus:ring-4 focus:ring-[color:var(--game-cyan)]/50"
     >
       <div className="flex items-center justify-between">
         <span
@@ -145,7 +238,7 @@ function HighlightCard({
         // in both themes.
         <div
           data-highlight-prompt="1"
-          className="rounded-xl bg-[var(--game-cream)] px-3 py-2 text-[13px] leading-snug"
+          className="rounded-xl bg-[var(--game-cream)] px-4 py-3 text-sm leading-snug font-medium"
           style={{
             color: "var(--game-canvas-dark)",
             borderWidth: 2,
@@ -154,12 +247,12 @@ function HighlightCard({
           }}
         >
           {tokens.length > 0 ? (
-            <span>
+            <span className="flex flex-wrap gap-x-1 gap-y-0.5">
               {tokens.map((t, i) => (
                 <span
                   key={`${t.position}-${i}`}
                   data-role={t.role}
-                  className="inline-block mx-0.5"
+                  className="inline-block"
                 >
                   <span className={ROLE_UNDERLINE[t.role]}>{t.token}</span>
                 </span>
@@ -191,9 +284,9 @@ function HighlightCard({
       )}
 
       {highlight.top_guess && highlight.top_guess.total_score > 0 ? (
-        <div className="rounded-xl bg-accent text-accent-foreground border-2 border-[var(--game-ink)] px-3 py-2 flex items-start gap-2">
+        <div className="rounded-xl bg-accent text-accent-foreground border-2 border-[var(--game-ink)] px-3 py-2.5 flex items-start gap-2.5">
           <span
-            className="player-chip h-7 w-7 shrink-0 text-[11px]"
+            className="player-chip h-8 w-8 shrink-0 text-[11px]"
             style={(() => {
               const c = chipColorsForPlayer(highlight.top_guess.player_id);
               return {
@@ -213,10 +306,10 @@ function HighlightCard({
                 +{highlight.top_guess.total_score}
               </span>
             </div>
-            <p className="text-[12px] italic leading-snug truncate">
+            <p className="text-[12px] italic leading-snug truncate mt-0.5">
               &ldquo;{highlight.top_guess.guess}&rdquo;
             </p>
-            <p className="text-[10px] font-bold truncate opacity-80">
+            <p className="text-[10px] font-bold truncate opacity-80 mt-0.5">
               {topGuesser?.display_name ?? "—"}
             </p>
           </div>

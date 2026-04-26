@@ -491,7 +491,7 @@ function RoundCard({
                   data-recap-guess={isTop ? "top" : undefined}
                   className={`rounded-xl px-3 py-2 border-2 flex items-center gap-2 ${
                     isTop
-                      ? "bg-accent border-[color:var(--game-pink)]"
+                      ? "bg-accent text-accent-foreground border-[color:var(--game-pink)]"
                       : "bg-[var(--game-paper)] border-[var(--game-ink)]/30"
                   }`}
                 >
