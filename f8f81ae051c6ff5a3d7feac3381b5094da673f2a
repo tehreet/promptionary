@@ -1,0 +1,40 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+User reported player-chip text was illegible in dark mode (cream-on-cream
+on light random hues). Filed as #52.
+
+## Actions
+- Found `colorForPlayer(id)` in `lib/player.ts` returning HSL(h, 80%, 65%).
+- Added `chipColorsForPlayer(id)` returning `{ bg, ink }` where ink is
+  picked by WCAG relative luminance from the chip's HSL — dark ink on
+  light bg, cream ink on dark bg.
+- Added `--chip-ink` CSS variable that `.player-chip` honors with
+  `--game-ink` as the default for back-compat.
+- Updated 17 chip call sites across game-client, lobby-client, recap,
+  daily, leaders, profile-stats, chat-panel, etc.
+- Pinned `/leaders` medal chips (gold/cream/bronze) to dark ink since
+  they're always light regardless of theme.
+
+## Errors & Mistakes
+- Initial agent edit landed in main tree instead of worktree (`pwd` not
+  checked first). Reverted, redid in worktree.
+
+## Dead Ends
+- Considered Option B (force dark ink + outline/shadow regardless of bg).
+  Rejected — luminance approach kills the bug at the source rather than
+  papering over it.
+
+## Hints for Future Agents
+- `colorForPlayer` is also used as stripe color in chat-panel and as the
+  live-cursor SVG fill. Those are NOT chip backgrounds — leave them alone
+  (text-on-paper, not text-on-chip).
+- HSL → relative luminance helper inlined in lib/player.ts; ~15 lines, no
+  deps. Don't pull in a color library.
+
+## Codebase Discoveries
+- `MEDAL_COLORS` on `/leaders` is theme-locked (always light), so it
+  needs a dark `--chip-ink` override unconditionally.
+
+## Open Questions
+None.
