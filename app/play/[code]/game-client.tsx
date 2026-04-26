@@ -1936,7 +1936,7 @@ function GuessRow({
       data-top-guess={isTop ? "1" : undefined}
       className={`rounded-2xl px-3 sm:px-4 py-3 border flex items-start gap-3 sm:gap-4 shadow-sm ${
         isTop
-          ? "bg-accent border-[color:var(--game-pink)]/60 ring-2 ring-[color:var(--game-pink)]/40"
+          ? "bg-accent text-accent-foreground border-[color:var(--game-pink)]/60 ring-2 ring-[color:var(--game-pink)]/40"
           : "bg-card text-card-foreground border-border"
       }`}
     >

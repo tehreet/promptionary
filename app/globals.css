@@ -132,11 +132,13 @@
   --primary: var(--game-pink);
   --primary-foreground: var(--game-cream);
   --secondary: var(--game-cyan);
-  --secondary-foreground: var(--game-ink);
+  /* Cyan stays light in dark mode, so its foreground must remain dark
+     for readable contrast — don't let it flip with --game-ink. */
+  --secondary-foreground: #1e1b4d;
   --muted: color-mix(in oklch, var(--game-ink) 12%, var(--game-canvas-warm));
   --muted-foreground: color-mix(in oklch, var(--game-ink) 70%, transparent);
   --accent: var(--game-cyan);
-  --accent-foreground: var(--game-ink);
+  --accent-foreground: #1e1b4d;
   --destructive: #ff6b87;
   --border: var(--game-ink);
   --input: var(--game-ink);
