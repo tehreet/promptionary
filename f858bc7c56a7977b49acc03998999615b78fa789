@@ -1,0 +1,45 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+User reported team chat hitting "not allowed" / hangs during active rounds.
+Filed as #57.
+
+## Actions
+- Found `post_message` RPC in 20260419182000_infra_cleanup.sql had a
+  phase-blackout that fired even for team-scoped writes.
+- New migration 20260420160000_team_chat_blackout_bypass.sql:
+  - `post_message`: when `p_team is not null`, skip the blackout entirely;
+    spectators rejected unconditionally on team chat.
+  - `room_messages_insert` policy split into 3 explicit OR branches: team
+    teammate (any phase), spectator room-wide (any phase), non-spectator
+    room-wide (lobby/reveal/game_over only).
+- Client `chat-panel.tsx`: 8s `Promise.race` timeout; on timeout/error
+  show "couldn't send" via existing `[data-chat-error]` and restore draft.
+
+## Errors & Mistakes
+- `supabase db push` from worktree failed because team-prompts agent's
+  later migration hadn't landed yet. Migration was already applied via
+  the management API by the sibling agent. Confirmed bytes-identical
+  before merging.
+
+## Dead Ends
+- Briefly considered combining team-chat fix with the full blackout
+  removal (#74). Held off — wanted incremental change. Full blackout
+  was removed later in a separate PR (#74) when phase-poll-jitter was
+  the root cause.
+
+## Hints for Future Agents
+- The RLS policy structure is now: each branch is independently auth'd,
+  so adding new chat scopes (e.g. spectator-vs-team) means adding a 4th
+  OR branch, not refactoring the existing three.
+- 8s timeout chosen empirically: post_message is normally <1s; 8s catches
+  realistic prod hangs without false-positiving on slow networks.
+
+## Codebase Discoveries
+- `room_messages_insert` policy ordering matters: spectator branch came
+  BEFORE team branch in the old version, which is why team-scoped
+  spectator inserts were slipping through (then SELECT readback failing
+  and hanging the client).
+
+## Open Questions
+None — superseded by PR #74 which dropped the room-wide blackout entirely.
