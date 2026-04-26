@@ -1,0 +1,112 @@
+## Conversation
+User asked: "i thought we switched off playwright so testing was much faster?"
+followed by "Yes, also dispatch multiple agents i want to clean up all docs
+if they are stale, etc. don't mention overstory or anything in the docs yet"
+
+The user's recall was fuzzy — they hadn't switched off Playwright. The
+speedup came from (a) adding Vitest unit tests (#62) and (b) the
+PROMPTIONARY_MOCK_GEMINI=1 server flag (#63) that stubs Gemini. I clarified
++ dispatched two parallel agents:
+
+  1. Trace MOCK_GEMINI wiring (test-side or runtime?). Verdict: runtime.
+     `lib/gemini.ts:5-31` checks `process.env.PROMPTIONARY_MOCK_GEMINI === "1"`
+     at module load on the Node runtime. Consequence for the eventual agent
+     factory: to mock-test against a Vercel preview, the flag must be set
+     in Vercel's Preview env, not just on the Playwright runner.
+
+  2. Audit all docs for staleness with the explicit constraint "do not
+     mention overstory / mulch / canopy / seeds / greenhouse / any
+     agent-factory tooling — those are not yet documented." The audit
+     produced ~22 specific edits with file:line, ranked by severity.
+
+Then I executed the cleanup directly on a fresh branch
+`docs/refresh-2026-04-26`. Agent factory work that was in flight (the
+`.overstory/` `.seeds/` `.canopy/` `.mulch/` scaffolding plus
+`scripts/bots.ts` cursor/chat additions) was stashed first as
+`wip-agent-factory-and-bots` so it doesn't mix into this PR.
+
+## Actions
+- Stashed work-in-progress (incl. untracked) before branching.
+- Found a STALE branch `docs/cleanup-stale-claims` from 2026-04-20 with one
+  commit (67c85e2) that did a partial cleanup but had its own bug — it
+  carried the same incorrect pg_cron description ("rescues stuck
+  lobby→generating") that we're fixing here. Deleted that branch and
+  started fresh as `docs/refresh-2026-04-26`.
+- Made surgical edits to AGENTS.md for: pg_cron description (now correctly
+  describes reveal→game_over rescue), backlog removals (Sign-in-Vercel,
+  moderation, room_mode legacy), private-channel "DO NOT APPLY" callout,
+  Teams DnD mention, chat-blackout migration name, base-ui mention.
+- Rewrote the feature-list paragraph to include 18+ shipped features the
+  prose was missing.
+- Added a new "Modes & toggles" section (Blitz, Taboo, vote-to-skip,
+  spectator modifiers, spectator tiebreaker, team-turns, Quick Match,
+  prefetch).
+- Rewrote the Testing discipline block: added Vitest sub-bullet, added
+  MOCK_GEMINI sub-bullet (with the "must set in Vercel Preview env to
+  honor it" note for future agents), refreshed e2e coverage from 21 to
+  all 44 specs with one-liners.
+- Extended Commands with bun lint / test:unit / notes:fetch / notes:push /
+  the mock-Gemini dev recipe.
+- Added 4 new gotchas: cookie chunking, realtime auth refresh, env trim,
+  Supabase singleton (last one fixed in #82).
+- Replaced README.md wholesale: fixed embedding model, dropped Turbopack
+  claim, fixed Realtime publication list, fixed phasing claim, added Tests
+  section, added Architecture pointer at AGENTS.md.
+- Added `⚠️ Historical artifact` banner to all 4 plan docs + 1 spec doc
+  in docs/superpowers/plans/ + docs/superpowers/specs/.
+
+## Errors & Mistakes
+- First attempt to create the branch failed: `docs/cleanup-stale-claims`
+  already existed as a stale 2026-04-20 branch. Renamed to
+  `docs/refresh-2026-04-26` to disambiguate.
+- The stale branch's one commit had the SAME pg_cron bug we're fixing —
+  "rescues stuck lobby→generating" was wrong on both sides. Worth flagging:
+  if a future agent finds the lobby→generating wording elsewhere in the
+  codebase, it's wrong; pg_cron only rescues final-round reveal→game_over.
+
+## Dead Ends
+- Considered using the existing stale `docs/cleanup-stale-claims` branch
+  and adding to it. Rejected — its single commit was both incomplete and
+  carried its own bug. Cleaner to start fresh.
+- Considered adding a "Public-facing routes" section and a `scripts/`
+  documentation block in AGENTS.md (audit's MA-2, MA-3). Punted to a
+  follow-up if the user wants more depth — kept this PR focused on
+  factual errors + drift.
+
+## Hints for Future Agents
+- AGENTS.md has a constraint: "this is NOT the Next.js you know" — that
+  stays. Don't replace it with generic Next.js descriptions.
+- The user explicitly said "don't mention overstory or anything in the
+  docs yet" — that means mulch, canopy, seeds, sapling, greenhouse, the
+  whole os-eco stack. They're set up in `.overstory/` `.seeds/` `.mulch/`
+  `.canopy/` `.greenhouse/` but not yet documented in AGENTS/README. Do
+  not add references unless the user opens that door.
+- pg_cron in this repo: `tick_phase_transitions()` from
+  `20260419182000_infra_cleanup.sql` rescues final-round reveal→game_over
+  + abandoned-room cleanup (>2h past phase_ends_at). It does NOT advance
+  any other phase. Inter-round transitions are host-driven.
+- The stashed branch `wip-agent-factory-and-bots` contains the
+  `.overstory/` + `.seeds/` scaffolding (staged) + `scripts/bots.ts`
+  cursor/chat additions (unstaged) + `.canopy/` `.greenhouse/` `.mulch/`
+  (untracked). Restore with `git stash pop` before working on the agent
+  factory PR.
+
+## Codebase Discoveries
+- Audit count: tests/e2e/ has 44 specs (AGENTS.md was listing 21).
+  tests/unit/ has 4 specs (AGENTS.md listed 0). Both numbers are pinned in
+  the refreshed doc.
+- AGENTS.md was listing 4 deferred items as backlog that had all shipped:
+  - Sign in with Vercel → PR #25
+  - Moderation on artist prompts → PR #19/#65/#73
+  - Rate limits on room creation (in earlier branch version) → PR #24
+  - PWA manifest (in earlier branch version) → unclear if shipped
+- The private-channel migration `20260419052512_realtime_private_channels.sql`
+  starts with literal `-- DO NOT APPLY.` per PR #60. The doc was
+  understating this as "disabled in practice."
+
+## Open Questions
+- Should the "Public-facing routes" and `scripts/` documentation
+  sections (audit MA-2, MA-3) be added in a follow-up?
+- The `docs/superpowers/plans/` files are now banner-marked but the
+  bodies are still stale. If they ever become useful again, they'd need
+  a real refresh; for now banners are sufficient.
