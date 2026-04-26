@@ -1,0 +1,36 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+User reported "moderator returns empty reasons" — prompts rejected with no
+visible feedback. Filed as #56 from CLAUDE.md's internal task list.
+
+## Actions
+- Read `lib/gemini.ts::moderatePrompt`. Confirmed when classifier replied
+  "UNSAFE" with no reason, return shape was `{ safe: false, reason: undefined }`.
+- Tailored fallback strings keyed by category word (VIOLENCE/SEXUAL/HATE/
+  HARASSMENT/SELF_HARM); generic fallback otherwise.
+- Mock branch unchanged.
+- Added `tests/unit/moderation.test.ts` with 3 cases (bare UNSAFE, whitespace
+  reason, real reason pass-through). Required mocking `@google/genai` via a
+  class stub since the module constructs `new GoogleGenAI(...)` at import.
+
+## Errors & Mistakes
+None recorded. Single-file change.
+
+## Dead Ends
+None.
+
+## Hints for Future Agents
+- The moderator returns `{ safe, reason? }` (NOT `{ unsafe, detail? }` — the
+  task brief I was given had the wrong shape).
+- Fail-open on classifier exception: a flaky moderator must NOT block gameplay.
+- The category-word match is intentionally loose (any occurrence in raw
+  response, case-insensitive). Don't tighten it without checking real Gemini
+  responses — they vary in shape.
+
+## Codebase Discoveries
+- `tests/unit/daily.test.ts` has the canonical pattern for mocking
+  `@google/genai` inside vitest (`vi.mock` at top of file).
+
+## Open Questions
+None.
