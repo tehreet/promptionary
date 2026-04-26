@@ -1,0 +1,114 @@
+## Conversation
+User reported Chrome console spam blowing up the tab during gameplay, plus
+stuttering with many cursors moving fast. Suspected Supabase Realtime / live
+cursors. Asked me to dispatch agents to map the codebase and discuss.
+
+After agents reported, I framed three levers (cursor state-out-of-React,
+broadcast throttle, useCountdown background-pause). User mentioned a stress
+script "scripts/bots.ts" and asked if we could simulate cursors with it.
+Implemented + ran 10 bots into room GNTP — confirmed working. Then user
+asked for chat-message sending; added that and was about to relaunch when
+GNTP had already started so bots couldn't join. User pasted a fresh code
+ETZR, bots flooded chat + cursors fine.
+
+Then user dumped the actual console output. Smoking gun:
+> Multiple GoTrueClient instances detected ... :2099, :2100, :2101 ...
+
+The instance counter was incrementing ~10/sec. That's the cause of the
+"console spam blows up Chrome" problem — not loop logging, not realtime
+warnings, but thousands of GoTrueClients all listening on the same
+auth-token storage key.
+
+Found it: lib/supabase/client.ts had two factories (`createSupabaseBrowserClient`
+for data, `createSupabaseAuthBrowserClient` for auth/SSR) that constructed
+a fresh client every call. The killer was `useRef(createSupabaseBrowserClient())`
+in game-client.tsx (3x) and host-controls.tsx — useRef's argument runs on
+every render, and the 250ms useCountdown drives ~4 renders/sec, so 12 fresh
+clients/sec just from those refs.
+
+User said "push to prod bro." Shipping via PR per their established flow
+(memory: deploy via PR merge, not vercel CLI).
+
+## Actions
+- Read lib/supabase/client.ts to see the un-memoized factories.
+- grep'd all callers to confirm scope: 12+ call sites including useRef hot paths.
+- Edited the file to add `cachedDataClient` / `cachedAuthClient` module-scope
+  caches on both factories. Tiny diff: 4 added lines + 2 cache vars per fn.
+- `bun run build` passed.
+- For tooling: extended scripts/bots.ts with cursor sim (Lissajous drift,
+  20Hz default, configurable via --cursor-hz) and chat sim (8s/bot jittered
+  ±50%, post_message RPC + chat broadcast on room-{id}-live). Refactored
+  startCursorLoop + chat into one startBotRealtime that opens a single
+  channel and runs both timers off it.
+- Bundled both changes into one commit on branch fix/supabase-client-singleton.
+
+## Errors & Mistakes
+- First Explore agent claimed there was no console spam in hot paths.
+  Technically true (no console.* in cursor handlers) but missed that the
+  spam comes from inside GoTrueClient's own warning. Lesson: static console.*
+  audit ≠ what actually fires at runtime.
+- Second Explore agent mis-identified the render crash candidates.
+  Suggested guessesFromReveal[0]?.total_score as a likely (reading 'length')
+  source — wrong, ?. only protects total_score not the array itself, and
+  the symptom is reading 'length' not '0'. Did not pin the actual crash
+  source; user only saw it once and didn't have a clean repro.
+- Initial bot launch into ETZR worked but the user came back saying spam
+  was still happening. I had to explain my fix was local-only — never deployed.
+  The deploy hash in the user's stack trace (dpl_CsKjx7naVAhwBBXKxEsc3UxsNZvR)
+  was the existing prod deploy, not a new one. Future agents: when user
+  reports "fix not working," always confirm the change was actually deployed.
+
+## Dead Ends
+- The Explore agents' suspect lines for the render crash. Without a
+  non-minified stack frame we can't pin it. Deferred until user can repro
+  with "Pause on uncaught exceptions" enabled.
+- Considered renaming `createSupabaseBrowserClient` → `getSupabaseBrowserClient`
+  to reflect its new singleton semantics. Rejected: 12+ call sites, scope
+  creep on a surgical fix. Kept the old name; just memoized internally.
+- Considered cleaning up `useRef(createSupabaseBrowserClient())` to either
+  `useState(() => factory())[0]` or a direct call. Rejected for same reason.
+  With singleton in place, `useRef`'s arg is a no-op cached lookup.
+
+## Hints for Future Agents
+- The browser supabase client architecture is unusual: vanilla
+  `@supabase/supabase-js` for data, `@supabase/ssr` only for auth/cookie
+  flows. AGENTS.md explains why (the ssr browser client has a getSession
+  hang). Don't "simplify" by collapsing them.
+- BOTH factories now return module-scope singletons. Calling them from
+  events / effects / refs is fine; they're idempotent.
+- Module scope per JS context = per page-load, so a hard navigation gets
+  a fresh client which then re-reads the auth cookie. Soft navigations
+  reuse the singleton — which is correct because the cookie hasn't
+  changed.
+- room-channel.tsx's 25-min `realtime.setAuth(token)` refresh still
+  works correctly because there's now a stable singleton's realtime
+  socket to update. Before this fix, refreshing one client's auth had
+  no effect on the dozen newly-constructed siblings.
+- scripts/bots.ts can simulate cursors AND chat. Use --no-cursors /
+  --no-chat / --cursor-hz / --chat-interval to isolate stress tests.
+  Bots fail to join if the room is past lobby — they need a fresh code.
+
+## Codebase Discoveries
+- `useRef(expensiveCall())` is a React anti-pattern that bites hard:
+  the constructor runs every render even though only the first value is
+  kept. Common fix: useRef(null) + lazy-init in an effect, OR
+  useState(() => expensiveCall())[0]. We didn't refactor those callers
+  because the singleton makes the hot constructor a no-op now.
+- The user-menu.tsx initial render runs createSupabaseAuthBrowserClient()
+  inside a useEffect once per mount. UserMenu lives in the root layout, so
+  it runs once per page load — not per render. Why was it triggering the
+  warning so much? Probably because the OLD un-memoized data factory was
+  constructing dozens of supabase-js clients per second, and each one's
+  GoTrueClient sees the storage key and emits the warning. The ssr-auth
+  client is innocent volume-wise; both are fixed by this commit anyway.
+
+## Open Questions
+- The render crash (Cannot read properties of undefined reading 'length'
+  inside Array.map during a round transition) is unresolved. User saw it
+  once. Deferred until repro with sourcemaps.
+- The `/api/start-round 404` reported alongside the render crash is most
+  likely a stale round_id race: host POSTed for a round_id that was
+  already deleted in the gemini-failure cleanup at start-round/route.ts:200.
+  Also unresolved without a fresh repro. The route returns
+  {"error":"round not found"} JSON not a Next.js literal 404, so a
+  deploy/routing issue is unlikely.
