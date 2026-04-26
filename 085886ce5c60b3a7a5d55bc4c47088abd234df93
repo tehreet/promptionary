@@ -1,0 +1,39 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+User issue #4 was "shareable game recap with highlights" — base recap
+already shipped (PR #29), missing piece was highlight curation. Re-scoped
+the issue and dispatched an agent for the curation work.
+
+## Actions
+- Added `app/play/[code]/recap/highlights-section.tsx` with 3 cards:
+  closest guess (max total_score), biggest swing (max delta vs round
+  average), most active round (most chat messages).
+- Extended `fetchRecap()` in `page.tsx` to compute highlights on the fly
+  from existing data — no migration, no new columns.
+- Each bucket independently nullable; renders "—" if no signal.
+
+## Errors & Mistakes
+None recorded.
+
+## Dead Ends
+- "Absurd images" bucket from issue spec deferred — heuristic was TBD
+  and speculative. Documented as out of scope.
+
+## Hints for Future Agents
+- `room_messages` has NO `round_id` column. Bucketing chat by round
+  requires querying the round's `[started_at, ended_at]` window. Added
+  `started_at` to the rounds select so this works.
+- `guesses` has unique(round_id, player_id) so per-round-per-player
+  total_score = the guess row's total_score — no group-by needed.
+- Artist-mode safe: artist doesn't appear in `guesses`, so they don't
+  skew the round average or compete for the swing pick.
+
+## Codebase Discoveries
+- The recap page is service-role-read-gated on `phase === 'game_over'`.
+  Anything you add for in-progress games has to render the friendly
+  "still in progress" state without leaking prompts.
+
+## Open Questions
+- Whether to add an "absurd images" bucket someday. Heuristic candidates:
+  prompt complexity, chat reaction volume, manual tagging.
