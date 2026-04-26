@@ -1,0 +1,34 @@
+## Conversation
+Task promptionary-a21a: fix unreadable cream-on-cyan text on top-guess rows in dark mode (GitHub issue #87).
+The spec arrived via mail (msg-63txz0c6ffpm) since no spec file was provided at spawn.
+
+## Actions
+1. Read seeds task (sd show promptionary-a21a) — confirmed the dark mode contrast bug.
+2. Checked mail — got full spec from lead-a21a.
+3. Grepped for hardcoded bg-blue-* utilities — found none; the real culprit was --accent-foreground inheriting --game-ink which flips to cream in dark mode.
+4. Read globals.css dark block to confirm: --accent: var(--game-cyan) → #6fe8eb (light cyan), --accent-foreground: var(--game-ink) → #fff7d6 (cream). Cream on light cyan = unreadable.
+5. Fixed globals.css: pin --secondary-foreground and --accent-foreground to #1e1b4d in .dark block.
+6. Added text-accent-foreground to three bg-accent isTop branches:
+   - app/play/[code]/game-client.tsx L1939 (GuessRow)
+   - app/r/[round_id]/page.tsx L266 (share page guess list)
+   - app/play/[code]/recap/page.tsx L494 (recap mini-row)
+7. Verified baseline lint error count (27) unchanged after changes.
+8. bun run build passed cleanly.
+
+## Errors & Mistakes
+None. The spec was clear and changes were minimal.
+
+## Dead Ends
+Initially grepped for bg-blue-* / bg-sky-* (as the task description suggested) — found nothing. The actual culprit was the semantic --accent-foreground token, not a hardcoded utility.
+
+## Hints for Future Agents
+- --game-ink flips to cream (#fff7d6) in dark mode, so it CANNOT be used as foreground for light surfaces like --game-cyan. Use a literal #1e1b4d for the foreground of any surface that stays light in both themes.
+- sidebar-accent-foreground and other sidebar-* tokens still reference var(--game-ink) in .dark — if sidebar cyan surfaces ever appear, they'll have the same bug. Out of scope for this task but worth noting.
+- The three bg-accent consumers touched here were the only ones without text-accent-foreground. Other consumers (game-client.tsx:1353, :3028, round-highlights-carousel.tsx:194) already had it.
+
+## Codebase Discoveries
+- bun run lint has 27 pre-existing errors unrelated to this change. These are pre-existing issues in other files (account-client.tsx, daily-client.tsx, leaders/page.tsx, app/page.tsx, etc.).
+- The .dark block in globals.css lives at lines 112–159; :root palette at 92–109. They are separate blocks — the dark block duplicates semantic aliases that reference the flipped game-* vars.
+
+## Open Questions
+- sidebar-accent-foreground in .dark still = var(--game-ink) = cream. If any sidebar element uses bg-accent-ish cyan, it'd have the same bug. Noted but not scoped here.
