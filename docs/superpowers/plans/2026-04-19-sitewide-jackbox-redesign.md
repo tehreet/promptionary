@@ -1,5 +1,7 @@
 # Sitewide Jackbox Redesign Implementation Plan
 
+> ⚠️ **Historical artifact.** Written 2026-04-19; the redesign shipped on the `feat/sitewide-jackbox-redesign` branch. Token names, file paths, and component breakdowns may have drifted since. Read [`AGENTS.md`](../../../AGENTS.md) for live tokens and conventions.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Migrate the entire site from the gradient-and-glassmorphism chrome to the Jackbox × Arc sticker-card aesthetic, with full dark-mode support and all tokenization cleanup, in a single feature branch of ten independently revertable commits.

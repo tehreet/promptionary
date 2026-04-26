@@ -1,5 +1,7 @@
 # Sitewide Jackbox Redesign — Design Spec
 
+> ⚠️ **Historical artifact.** Written 2026-04-19; the redesign shipped. Some tokens and component names may have drifted since. Read [`AGENTS.md`](../../../AGENTS.md) for live tokens and conventions.
+
 **Date:** 2026-04-19
 **Branch:** `feat/sitewide-jackbox-redesign`
 **Predecessor:** [Landing redesign plan](../plans/landing-redesign-jackbox.md) (the landing-only plan the user drafted inline — incorporated and extended here)

@@ -1,5 +1,7 @@
 # Phase 2 — Lobby Implementation Plan
 
+> ⚠️ **Historical artifact.** Written 2026-04-19. Phase 2 shipped, plus many features not reflected here (drag-and-drop teams, Quick Match, host kick/transfer-host gating, etc.). Read [`AGENTS.md`](../../../AGENTS.md) for live state.
+
 > **For agentic workers:** this plan is executed inline via superpowers:executing-plans in the same session as Phase 1. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Anonymous users can land on `/`, click "Create Room" or type a 4-letter code, join a lobby, see other players in real time, and (if host) kick off the first round.
