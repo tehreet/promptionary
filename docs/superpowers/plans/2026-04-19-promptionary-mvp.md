@@ -1,5 +1,7 @@
 # Promptionary MVP Implementation Plan
 
+> ⚠️ **Historical artifact.** This plan was written 2026-04-19 against a pre-MVP codebase. Phases 1–4 long since shipped, plus many features that aren't reflected here (Blitz, Taboo, vote-to-skip, spectator modifiers, Quick Match, recap, prefetch, and more). Do not use this as a guide to the current stack — read [`AGENTS.md`](../../../AGENTS.md) instead. Kept here only as a record of how the project was originally scoped.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship a playable vertical slice of Promptionary — anonymous users create a room with a 4-letter code, join, see an AI-generated image, submit guesses in a timed round, get role-weighted scores against the secret prompt, and advance through rounds. Party mode only. Vibrant bright UI (blues/pinks/purples). Deployed to promptionary.io.

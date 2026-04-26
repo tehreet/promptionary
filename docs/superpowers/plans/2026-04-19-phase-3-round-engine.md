@@ -1,5 +1,7 @@
 # Phase 3 — Round Engine Implementation Plan
 
+> ⚠️ **Historical artifact.** Written 2026-04-19. Phase 3 shipped, plus auto-finalize, vote-to-skip, spectator modifiers, prefetch round N+1, mock-Gemini test mode, and more — none of which are reflected here. The embedding model called out below is also stale (live model is `gemini-embedding-001`, not `text-embedding-004`). Read [`AGENTS.md`](../../../AGENTS.md) for live state.
+
 **Goal:** End-to-end playable round. Host clicks Start → Gemini writes a secret prompt + tags word roles → Gemini image model paints it → players see the image and a timer → players submit guesses → system scores them (role-weighted + semantic + speed) → reveal shows the true prompt and ranked guesses → auto-advance to next round → game-over leaderboard after `max_rounds`.
 
 **Architecture:**
