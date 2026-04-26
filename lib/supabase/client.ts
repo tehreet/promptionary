@@ -45,7 +45,17 @@ function readAuthCookie(): { access_token?: string; refresh_token?: string } | n
   }
 }
 
+// Singleton per browser context. Constructing a new SupabaseClient also
+// constructs a new GoTrueClient that listens on the shared auth-token
+// storage key — multiple instances trigger Supabase's "Multiple
+// GoTrueClient instances detected" warning and pile up listeners. The
+// factory name is preserved so existing call sites work unchanged, but it
+// now returns the cached singleton.
+let cachedDataClient: SupabaseClient | null = null;
+let cachedAuthClient: ReturnType<typeof createBrowserClient> | null = null;
+
 export function createSupabaseBrowserClient(): SupabaseClient {
+  if (cachedDataClient) return cachedDataClient;
   const client = createClient(
     clientEnv.NEXT_PUBLIC_SUPABASE_URL,
     clientEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -69,6 +79,7 @@ export function createSupabaseBrowserClient(): SupabaseClient {
       refresh_token: session.refresh_token ?? "",
     });
   }
+  cachedDataClient = client;
   return client;
 }
 
@@ -76,8 +87,10 @@ export function createSupabaseBrowserClient(): SupabaseClient {
 // that really do need the SSR cookie-writer. Those flows go through
 // server actions / route handlers where this hang hasn't reproduced.
 export function createSupabaseAuthBrowserClient() {
-  return createBrowserClient(
+  if (cachedAuthClient) return cachedAuthClient;
+  cachedAuthClient = createBrowserClient(
     clientEnv.NEXT_PUBLIC_SUPABASE_URL,
     clientEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
+  return cachedAuthClient;
 }
