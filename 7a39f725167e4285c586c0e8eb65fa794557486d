@@ -1,0 +1,52 @@
+## Backfill note (added 2026-04-26 retroactively)
+
+## Conversation
+Three live bugs in team-prompts subsystem (PR #46): turn display
+off-by-one at turn_idx=0, auto-skip never fires, submit_team_phrase
+silently drops writes. Filed as #58.
+
+## Actions
+- Root caused (a): client sorted writing-team roster by display_name,
+  server's `team_prompting_roster()` orders by joined_at. Mismatch on
+  non-alphabetical join orders. Fix: fetch joined_at on every
+  room_players query and sort client roster by (joined_at, player_id).
+- Root caused (b): `skip_team_turn` had a 1s slack on its expiry guard
+  rejecting the host's first RPC at the zero-crossing; client effect
+  swallowed the error. Fix: drop slack server-side (client already
+  rounds with Math.ceil) AND replace fire-and-forget with 1s polling
+  retry while turn is overdue. Also added expired-turn fast-forward
+  inside `submit_team_phrase`.
+- Root caused (c): RPC was raising exceptions but server logs were
+  empty. Added `RAISE NOTICE 'submit_team_phrase rejected: ...'` before
+  every exception so Vercel runtime logs surface reasons.
+- Migration 20260420160100_team_prompts_hardening.sql.
+
+## Errors & Mistakes
+- Migration push was blocked by team-chat agent's earlier
+  20260420160000 migration. Used management API direct SQL endpoint
+  and recorded the version in supabase_migrations.schema_migrations
+  manually.
+
+## Dead Ends
+- Considered server-side cron tick for auto-skip (mirroring
+  20260419182000_infra_cleanup.sql's lobby→generating tick). Rejected
+  in favor of client-side retry — smaller surface, easier to reason
+  about timing.
+
+## Hints for Future Agents
+- BONUS BUG FIXED: `useEffect` at game-client.tsx:367 was overwriting
+  currentRound with only rounds_public fields, wiping
+  writing_team/turn_idx/turn_ends_at until the 2s poll backfilled.
+  ~2s every page rendered as 'watcher' with "Turn 1 of 0". Merged the
+  team-prompting fetch into the initial effect and added a
+  `data-team-prompting="loading"` early-return.
+- The slack-vs-Math.ceil tension is the kind of thing that bites again:
+  client and server both round, but in different directions, at the
+  zero-crossing. Pick a discipline (server is authoritative) and stick.
+
+## Codebase Discoveries
+- `team_prompting_roster()` orders by joined_at deterministically.
+  Anything client-side that reasons about turn order MUST match this.
+
+## Open Questions
+None.
