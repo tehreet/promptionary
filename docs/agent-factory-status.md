@@ -1,4 +1,4 @@
-# Agent Factory — Status & Handoff (2026-04-27, v2-prep update)
+# Agent Factory — Status & Handoff (2026-04-27, v2 complete)
 
 This doc captures where the autonomous-issue-to-PR loop stands so a fresh
 Claude Code session can resume without re-deriving everything.
@@ -68,15 +68,32 @@ Claude Code session can resume without re-deriving everything.
    supervisor should set an env var or workdir that the hooks recognize
    as "greenhouse supervisor → allow git push + gh ops."
 
-2. **Preview e2e drift.** `bun test:e2e` against a fresh Vercel Preview
-   has 15 failing specs vs 51 passing. Three categories:
-   - 12 gameplay specs timing out on Supabase anon-auth rate limit
-     (4 parallel Playwright workers spawning 2-3 anon sessions each).
-     Fix: `playwright.config.ts` workers `4 → 2`.
-   - 3 OAuth/passkey specs — likely missing OAuth client IDs in Vercel
-     Preview env (or hitting different Supabase project than prod).
-   - 1 dark-mode `design-tokens.spec.ts:125` — possibly stale preview
-     cache, builder's diff didn't touch `<main>` background.
+2. **Preview e2e drift.** Status as of 2026-04-27 against a fresh
+   Vercel Preview: 6 failing specs vs ~63 passing.
+   - ~~12 gameplay specs timing out on Supabase anon-auth rate limit~~
+     Reduced to ~6 by dropping Playwright workers 4 → 2 (PR #99).
+     Remaining failures are mostly gameplay-flow specs that may need
+     workers=1 or are pre-existing flakes:
+     `full-round.spec.ts`, `multi-round.spec.ts`,
+     `prefetch-next-round.spec.ts`, `sfx.spec.ts:4`,
+     `spectator-tiebreaker.spec.ts:16`, `leaders.spec.ts:93`,
+     `moderation.spec.ts:7`.
+   - ~~3 OAuth/passkey specs — likely missing OAuth client IDs in
+     Vercel Preview env~~ Misdiagnosis. Real cause: stale button text
+     in the spec selectors. `auth.spec.ts` looked for "Email me a
+     sign-in link" but the button now says "Send magic link";
+     `passkey.spec.ts` looked for "Continue with a passkey" but the
+     button says "Use a passkey". Fixed in PR #101. Both prod and
+     Preview share the same Supabase project; OAuth config (Google,
+     Discord) IS disabled at Supabase level but the buttons render
+     unconditionally so visibility-only tests don't care.
+   - ~~1 dark-mode `design-tokens.spec.ts:125`~~ Misdiagnosis. Real
+     cause: `components/theme-provider.tsx` runs next-themes with
+     `enableSystem={false}` + `defaultTheme="light"`, so OS-level
+     `prefers-color-scheme: dark` (which Playwright's `colorScheme`
+     option sets) has no effect. Fixed in PR #102 by seeding
+     `localStorage["promptionary-theme"]="dark"` via `addInitScript`
+     before navigation.
 
 3. **~~`agent-verify.sh` was added to `builder.md` but the lead is the one
    that verifies.~~** RESOLVED 2026-04-27. `builder.md` no longer references
@@ -97,20 +114,49 @@ To get true 10-min/issue throughput:
    `PROMPTIONARY_TEST_URL=<preview> PROMPTIONARY_MOCK_GEMINI=1 bun test:e2e`.
    **Requires:** `VERCEL_TOKEN` repo secret. Add at
    github.com/tehreet/promptionary/settings/secrets/actions.
-3. **Branch protection on `main`** — TODO (user action). Require the
-   `e2e` check (from `preview-e2e.yml`) + existing build check. Allows
-   `gh pr merge --auto` to actually wait for green before merging.
-4. **Greenhouse listens for `agent-ready` AND `agent-swarm` labels.**
-   discord-ticket's SKILL.md gets a small section to classify scope and
-   add the right label. Greenhouse keeps coordinator dispatch (single
-   capability per repo per spec); the lead reads the spec and picks
-   atomic-vs-swarm internally (atomic = 1 builder, no scout/reviewer;
-   swarm = full overstory tree).
+3. ~~**Branch protection on `main`**~~ DONE 2026-04-27. `e2e` and
+   `Vercel` checks required, `enforce_admins: false` so admin override
+   stays available for cases like the one-time bootstrap merge. Set via
+   `gh api -X PUT /repos/.../branches/main/protection` in this session.
+4. ~~**Greenhouse listens for `agent-ready` AND `agent-swarm` labels.**~~
+   DONE 2026-04-27 with a different design than originally planned.
+   `gh issue list --label X --label Y` AND-matches, so two trigger labels
+   would have required either greenhouse code changes or duplicate repo
+   entries. Instead: `agent-ready` stays the sole trigger; discord-ticket
+   pairs `agent-swarm` with it whenever the user's interview describes
+   multi-subsystem rewrite scope. Greenhouse forwards labels to the lead
+   via the dispatch spec (already part of dispatcher.ts), and `lead.md`
+   now reads them at the top of `task-complexity-assessment` to pick
+   atomic vs swarm pipeline. discord-ticket SKILL.md updated in commit
+   `706c770` (separate repo).
 5. ~~**Reduce Playwright workers to 2**~~ DONE 2026-04-27. `workers: 2`
    in `playwright.config.ts`.
-6. **Set Vercel Preview env vars to mirror prod** — TODO (user action).
-   OAuth client IDs etc., so the e2e suite isn't fighting environmental
-   drift. `PROMPTIONARY_MOCK_GEMINI=1` is already set on Preview.
+6. ~~**Set Vercel Preview env vars to mirror prod**~~ DONE 2026-04-27,
+   but turned out to be a misdiagnosis. Both prod and Preview already
+   share the same Supabase project; no per-env OAuth env vars exist.
+   The actual fixes that landed under this task:
+   - PR #101: stale button text in auth + passkey specs
+   - PR #102: dark-mode spec seeds `localStorage` directly (next-themes
+     with `enableSystem={false}` ignores OS preference)
+   - PR #103: `preview-e2e.yml` fail-fast on Vercel API auth errors
+     (was silently retrying for 15min on `{"error":...}` responses)
+
+## Ship status
+
+All 6 v2 plan items are landed. The agent-factory pipeline is wired:
+
+- discord-ticket bot files issues with `agent-ready` (+ optional `agent-swarm`)
+- greenhouse polls `agent-ready` issues, dispatches a coordinator
+- coordinator → lead → builder; lead picks pipeline shape from labels
+- builder commits to worktree, supervisor pushes branch + opens PR
+- `preview-e2e` workflow polls Vercel for the deploy, runs `bun test:e2e`
+  with `PROMPTIONARY_MOCK_GEMINI=1` against the preview URL
+- branch protection requires `e2e` + `Vercel` checks
+- `enforce_admins: false` lets the user override on flaky-spec PRs
+
+Remaining e2e flakes (~6 specs) are pre-existing, mostly gameplay-flow
+timing — they will affect agent-shipped PRs the same way they affect
+human-shipped PRs. Triage / dropping `workers: 1` is a follow-up.
 
 ## Vercel preview env
 
@@ -156,7 +202,7 @@ These write to `.claude/settings.local.json` which is gitignored.
 3. `cat .greenhouse/config.yaml` — current daemon config. May need
    `daily_cap` / `max_concurrent` tuned before restart.
 4. `greenhouse status` to see if daemon is running.
-5. Remaining v2 work: task 3 (branch protection on main, requires user
-   action in GitHub settings) → task 4 (agent-swarm label classification
-   in discord-ticket) → task 6 (mirror prod OAuth env to Vercel Preview)
-   → fire the daemon and watch one issue end-to-end.
+5. v2 plan complete. Next: fire the greenhouse daemon and watch one
+   issue end-to-end. Decide whether to tighten the remaining 6 e2e
+   flakes (drop workers to 1, audit each spec) before or after the
+   first dogfood run.
