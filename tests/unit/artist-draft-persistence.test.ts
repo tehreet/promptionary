@@ -1,51 +1,38 @@
 import { describe, it, expect } from "vitest";
+import { restoreArtistDraft } from "@/app/play/[code]/game-client";
 
-// Unit tests for the artist prompt draft persistence logic introduced in
-// game-client.tsx. ArtistPromptingView initialises its textarea from a
-// {roundId, text} ref owned by the stable GameClientInner parent so the draft
-// survives the unmount/remount that occurs when Gemini image-gen fails and the
-// server rolls the room phase back to 'prompting'.
-//
-// These tests exercise the pure conditional that drives that initialisation;
-// no component rendering is required.
+// Unit tests for the artist prompt draft persistence logic in game-client.tsx.
+// ArtistPromptingView initialises its textarea from a {roundId, text} ref owned
+// by the stable GameClientInner parent so the draft survives the unmount/remount
+// that occurs when Gemini image-gen fails and the server rolls the room phase
+// back to 'prompting'.
 
-function resolveInitialDraft(
-  savedDraft: { roundId: string; text: string } | null,
-  currentRoundId: string | undefined,
-): string {
-  if (savedDraft && currentRoundId && savedDraft.roundId === currentRoundId) {
-    return savedDraft.text;
-  }
-  return "";
-}
-
-describe("resolveInitialDraft", () => {
+describe("restoreArtistDraft", () => {
   it("restores draft when roundId matches", () => {
     expect(
-      resolveInitialDraft({ roundId: "r1", text: "a fluffy cat" }, "r1"),
+      restoreArtistDraft({ roundId: "r1", text: "a fluffy cat" }, "r1"),
     ).toBe("a fluffy cat");
   });
 
   it("returns empty string when savedDraft roundId differs from current round", () => {
     // A new round should never inherit a stale draft from the previous round.
     expect(
-      resolveInitialDraft({ roundId: "r1", text: "a fluffy cat" }, "r2"),
+      restoreArtistDraft({ roundId: "r1", text: "a fluffy cat" }, "r2"),
     ).toBe("");
   });
 
   it("returns empty string when savedDraft is null", () => {
-    expect(resolveInitialDraft(null, "r1")).toBe("");
+    expect(restoreArtistDraft(null, "r1")).toBe("");
   });
 
   it("returns empty string when currentRoundId is undefined (round not loaded yet)", () => {
     expect(
-      resolveInitialDraft({ roundId: "r1", text: "a fluffy cat" }, undefined),
+      restoreArtistDraft({ roundId: "r1", text: "a fluffy cat" }, undefined),
     ).toBe("");
   });
 
   it("preserves empty-string drafts without triggering restoration", () => {
-    // An empty saved draft is fine; it's not a problem.
-    expect(resolveInitialDraft({ roundId: "r1", text: "" }, "r1")).toBe("");
+    expect(restoreArtistDraft({ roundId: "r1", text: "" }, "r1")).toBe("");
   });
 });
 
@@ -70,8 +57,7 @@ describe("onDraftChange ref mutation", () => {
       current: { roundId: "r1", text: "stale draft" },
     };
 
-    // Simulate a new round starting — currentRoundId changes to r2.
-    const draft = resolveInitialDraft(ref.current, "r2");
+    const draft = restoreArtistDraft(ref.current, "r2");
     expect(draft).toBe("");
   });
 });

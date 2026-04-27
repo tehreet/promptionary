@@ -2157,6 +2157,18 @@ function NumField({
   );
 }
 
+// Decide what text to seed the artist textarea with on (re)mount. Pure so
+// it can be unit-tested without React. The mount can fire mid-round when
+// image-gen failure rolls phase back to 'prompting' (see artistDraftRef in
+// GameClientInner).
+export function restoreArtistDraft(
+  saved: { roundId: string; text: string } | null,
+  roundId: string | undefined,
+): string {
+  if (!saved || !roundId) return "";
+  return saved.roundId === roundId ? saved.text : "";
+}
+
 function ArtistPromptingView({
   room,
   currentRound,
@@ -2174,10 +2186,8 @@ function ArtistPromptingView({
   savedDraft: { roundId: string; text: string } | null;
   onDraftChange: (roundId: string, text: string) => void;
 }) {
-  const [prompt, setPrompt] = useState<string>(
-    savedDraft && currentRound?.id && savedDraft.roundId === currentRound.id
-      ? savedDraft.text
-      : "",
+  const [prompt, setPrompt] = useState<string>(() =>
+    restoreArtistDraft(savedDraft, currentRound?.id),
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
