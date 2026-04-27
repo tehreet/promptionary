@@ -4,7 +4,7 @@ test("sign-in page renders the passkey CTA", async ({ page }) => {
   test.setTimeout(30_000);
   await page.goto("/sign-in");
   await expect(
-    page.getByRole("button", { name: /Continue with a passkey/ }),
+    page.getByRole("button", { name: /Use a passkey/ }),
   ).toBeVisible();
 });
 
@@ -128,7 +128,7 @@ test("anon visitor can sign up with a passkey, sign out, and sign back in", asyn
   // --- Sign up ---
   await page.goto("/sign-in");
   await page
-    .getByRole("button", { name: /Continue with a passkey/ })
+    .getByRole("button", { name: /Use a passkey/ })
     .click();
   // Empty authenticator → NotAllowedError → UI flips to register mode.
   await page.waitForSelector('[data-passkey-mode="register"]', {
@@ -158,7 +158,7 @@ test("anon visitor can sign up with a passkey, sign out, and sign back in", asyn
   // --- Sign back in with the same passkey ---
   await page.goto("/sign-in");
   await page
-    .getByRole("button", { name: /Continue with a passkey/ })
+    .getByRole("button", { name: /Use a passkey/ })
     .click();
   await page.waitForURL(/\/$/, { timeout: 20_000 });
   await expect(page.locator('[data-user-menu="1"]')).toBeVisible({

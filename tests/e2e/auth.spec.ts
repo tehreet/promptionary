@@ -14,7 +14,7 @@ test("sign-in page surfaces Google, Discord, and magic-link options", async ({
   ).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Email me a sign-in link/ }),
+    page.getByRole("button", { name: /Send magic link/ }),
   ).toBeVisible();
 });
 
@@ -39,7 +39,7 @@ test("magic-link input routes to 'Check your inbox' confirmation", async ({
   const email = `probe+${Date.now()}@example.com`;
   await page.getByLabel("Email").fill(email);
   await page
-    .getByRole("button", { name: /Email me a sign-in link/ })
+    .getByRole("button", { name: /Send magic link/ })
     .click();
 
   // Either the inbox confirmation or a rate-limit error — both prove the
