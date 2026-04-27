@@ -1,0 +1,29 @@
+## Conversation
+Found while diagnosing v2 task 6. Handoff doc claimed the dark-mode design-tokens spec was "stale preview cache". Real cause was different: next-themes is configured to ignore OS color preference, so the test's browser.newContext({ colorScheme: "dark" }) had no effect.
+
+## Actions
+1. Ran the failing spec against the current preview to capture exact behavior. Both light and dark contexts returned rgb(255, 247, 214) for `<main>` background.
+2. Inspected app/globals.css `.game-canvas` rule — background is var(--game-canvas-warm), which IS theme-aware.
+3. Checked .dark block at line 112 — properly redefines --game-canvas-warm to #14112e.
+4. Found the actual reason: components/theme-provider.tsx wraps next-themes with attribute="class", defaultTheme="light", enableSystem={false}. So the .dark class is only applied when the user clicks the toggle (which writes localStorage["promptionary-theme"]="dark"). OS-level prefers-color-scheme has no effect.
+5. Picked the test-side fix over changing app config — flipping enableSystem to true would change real user-facing behavior across every visit.
+6. Edited the spec to use page.addInitScript to set localStorage["promptionary-theme"]="dark" before navigation, then waitForFunction(() => document.documentElement.classList.contains("dark")) so the assertion runs after next-themes has hydrated and applied the class.
+7. Verified locally against the preview URL — passes in 3.4s.
+
+## Errors & Mistakes
+- I started by assuming the bug was on the CSS side and almost edited the .game-canvas rule. Reading components/theme-provider.tsx made it clear the test was the wrong shape, not the styles.
+
+## Dead Ends
+- Considered switching enableSystem to true. Rejected: would change first-paint experience for all visitors based on their OS preference, which is a design decision, not a test fix.
+- Considered adding a media query block to globals.css that mirrors the .dark variables under @media (prefers-color-scheme: dark). Rejected: would conflict with next-themes' explicit class-based control. User-toggled light mode on an OS-dark system would fight the media query.
+
+## Hints for Future Agents
+- The storageKey is "promptionary-theme" — defined in components/theme-provider.tsx:13. Don't hardcode it elsewhere; if it ever moves, both the toggle and any future tests have to follow.
+- next-themes hydration is async. waitForFunction on the .dark class is the right gate — page.goto alone doesn't guarantee the provider has run.
+- Playwright's addInitScript runs before any page script, including next-themes' first read of localStorage. It's the correct hook for this kind of test seeding (vs setting localStorage after navigation, which doesn't help since next-themes already read it).
+
+## Codebase Discoveries
+- The app intentionally locks to light by default and disables OS-system mode. There's no plan to honor prefers-color-scheme, per the explicit defaultTheme="light" + enableSystem={false} setup. Future similar-purpose tests should expect to seed localStorage rather than rely on context colorScheme.
+
+## Open Questions
+- Should there be a public test helper for "set theme = dark" so future specs don't re-implement the localStorage-seeding pattern? Not now; one usage doesn't justify abstraction (rules/simple.md: 3rd use rule).
