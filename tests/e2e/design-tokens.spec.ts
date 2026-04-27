@@ -123,12 +123,22 @@ test.describe("design tokens", () => {
   });
 
   test("non-landing pages flip canvas in dark mode", async ({ browser }) => {
+    // next-themes is configured with enableSystem={false} + defaultTheme="light",
+    // so OS-level prefers-color-scheme has no effect. Seed the storageKey
+    // (`promptionary-theme`) directly to force dark before navigation.
     for (const route of ["/leaders", "/sign-in"]) {
-      const light = await browser.newContext({ colorScheme: "light" });
-      const dark = await browser.newContext({ colorScheme: "dark" });
+      const light = await browser.newContext();
+      const dark = await browser.newContext();
+      await dark.addInitScript(() =>
+        window.localStorage.setItem("promptionary-theme", "dark"),
+      );
       const [lp, dp] = [await light.newPage(), await dark.newPage()];
       await lp.goto(route);
       await dp.goto(route);
+      // Wait for next-themes to read storage and apply the .dark class.
+      await dp.waitForFunction(() =>
+        document.documentElement.classList.contains("dark"),
+      );
       const lightBg = await lp
         .locator("main")
         .first()
