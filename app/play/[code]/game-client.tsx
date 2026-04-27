@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import confetti from "canvas-confetti";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAnimatedNumber } from "@/lib/animation";
-import { RoomChannelProvider, useRoomChannel } from "@/lib/room-channel";
+import { broadcast, RoomChannelProvider, useRoomChannel } from "@/lib/room-channel";
 import { LiveCursorsOverlay } from "@/components/live-cursors";
 import { ChatPanel } from "@/components/chat-panel";
 import { ReactionsBar } from "@/components/reactions-bar";
@@ -234,6 +234,13 @@ function GameClientInner({
   const autoSubmittedRef = useRef<string | null>(null);
   const roundNumRef = useRef<number>(room.round_num);
   roundNumRef.current = room.round_num;
+  // Keeps the guesses postgres_changes handler up-to-date without making
+  // currentRound a dep of the subscription effect (which would re-run the
+  // effect — and recreate the subscription + poll — on every state update).
+  const currentRoundRef = useRef<Round | null>(null);
+  useEffect(() => {
+    currentRoundRef.current = currentRound;
+  }, [currentRound]);
 
   const remaining = useCountdown(room.phase_ends_at);
 
@@ -287,7 +294,8 @@ function GameClientInner({
         { event: "INSERT", schema: "public", table: "guesses" },
         (payload) => {
           const g = payload.new as { round_id: string };
-          if (currentRound && g.round_id === currentRound.id) {
+          const cr = currentRoundRef.current;
+          if (cr && g.round_id === cr.id) {
             setSubmissionCount((c) => c + 1);
           }
         },
@@ -360,7 +368,7 @@ function GameClientInner({
       clearInterval(poll);
       supabase.removeChannel(ch);
     };
-  }, [room.id, room.round_num, currentRound]);
+  }, [room.id, room.round_num]);
 
   // Fetch current round whenever round_num changes. Per-round UI state reset
   // happens in the poller (where we detect id transitions) — duplicating it
@@ -1254,8 +1262,7 @@ function GameClientInner({
     const key = `${currentRound.id}:${currentPlayerId}`;
     if (lastBroadcastRef.current === key) return;
     lastBroadcastRef.current = key;
-    liveChannel.send({
-      type: "broadcast",
+    broadcast(liveChannel, {
       event: "skip-vote",
       payload: { round_id: currentRound.id, voter_id: currentPlayerId },
     });

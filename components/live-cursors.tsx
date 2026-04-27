@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useRoomChannel } from "@/lib/room-channel";
+import { broadcast, useRoomChannel } from "@/lib/room-channel";
 
 type Cursor = {
   id: string;
@@ -81,8 +81,7 @@ export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
 
     const send = (x: number, y: number) => {
-      channel.send({
-        type: "broadcast",
+      broadcast(channel, {
         event: "cursor",
         payload: { id: player.id, name: player.name, color: player.color, x, y },
       });
@@ -101,8 +100,7 @@ export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
       }
     };
     const onLeave = () => {
-      channel.send({
-        type: "broadcast",
+      broadcast(channel, {
         event: "cursor:leave",
         payload: { id: player.id },
       });
@@ -127,8 +125,7 @@ export function LiveCursorsOverlay({ children }: { children: ReactNode }) {
       window.removeEventListener("pointerleave", onLeave);
       window.removeEventListener("blur", onLeave);
       clearInterval(flush);
-      channel.send({
-        type: "broadcast",
+      broadcast(channel, {
         event: "cursor:leave",
         payload: { id: player.id },
       });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRoomChannel } from "@/lib/room-channel";
+import { broadcast, useRoomChannel } from "@/lib/room-channel";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Reaction = {
@@ -98,13 +98,10 @@ export function ReactionsBar({
     spawn(localId, emoji, x, y, player.color);
 
     // Broadcast for the fast path to other tabs in the same room.
-    if (channel) {
-      channel.send({
-        type: "broadcast",
-        event: "reaction",
-        payload: { id: localId, emoji, x, y, color: player.color },
-      });
-    }
+    broadcast(channel, {
+      event: "reaction",
+      payload: { id: localId, emoji, x, y, color: player.color },
+    });
 
     // Persist so the next tab that mounts within CATCHUP_WINDOW_SECONDS
     // still sees the activity. Rate-limited server-side; silently swallow
