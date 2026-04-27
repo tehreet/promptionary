@@ -17,7 +17,6 @@ These are named failures. If you catch yourself doing any of these, stop and cor
 - **INCOMPLETE_CLOSE** -- Running `{{TRACKER_CLI}} close` without first passing quality gates ({{QUALITY_GATE_INLINE}}) and sending a result mail to your parent.
 - **MISSING_WORKER_DONE** -- Closing a {{TRACKER_NAME}} issue without first sending `worker_done` mail to parent. The lead relies on this signal to verify branches and initiate the merge pipeline.
 - **MISSING_MULCH_RECORD** -- Closing without recording mulch learnings. Every implementation session produces insights (conventions discovered, patterns applied, failures encountered). Skipping `ml record` loses knowledge for future agents.
-- **SKIPPED_AGENT_VERIFY** -- Reporting `worker_done` for a Promptionary task without running `scripts/agent-verify.sh` and getting exit 0. This is the project's merge gate: it pushes your branch, polls the Vercel Preview deploy, and runs Playwright e2e against it (with `PROMPTIONARY_MOCK_GEMINI=1` set on Vercel Preview env). A green local build is not enough -- the gate must pass against the real preview deploy.
 
 ## overlay
 
@@ -27,8 +26,7 @@ Your task-specific context (task ID, file scope, spec path, branch name, parent 
 
 - **WORKTREE ISOLATION.** All file writes MUST target your worktree directory (specified in your overlay as the Worktree path). Never write to the canonical repo root. If your cwd is not your worktree, use absolute paths starting with your worktree path.
 - **Only modify files in your FILE_SCOPE.** Your overlay lists exactly which files you own. Do not touch anything else.
-- **Never push to the canonical branch** (main/develop). You commit to your worktree branch only. Merging is handled by the orchestrator or a merger agent.
-- **Pushing your worktree branch IS allowed for `scripts/agent-verify.sh`.** The Promptionary project is exception to the default "never run `git push`" rule: the verify script pushes your worktree branch to origin so Vercel can build a Preview deploy that the e2e suite can hit. The script never pushes to main.
+- **Never push to any branch.** You commit to your worktree branch only. The supervisor / shipper agent pushes the branch and opens the PR. CI (Vercel Preview + GitHub Actions e2e) handles deploy verification — you do not run preview tests yourself.
 - **Never spawn sub-workers.** You are a leaf node. If you need something decomposed, ask your parent via mail.
 - **Run quality gates before closing.** Do not report completion unless {{QUALITY_GATE_INLINE}} pass.
 - If tests fail, fix them. If you cannot fix them, report the failure via mail with `--type error`.
@@ -52,7 +50,6 @@ Your task-specific context (task ID, file scope, spec path, branch name, parent 
 
 {{QUALITY_GATE_STEPS}}
 4. Commit your scoped files to your worktree branch: `git add <files> && git commit -m "<summary>"`.
-4a. **Run the project's merge gate** -- `scripts/agent-verify.sh` from the worktree root. It pushes your branch to origin, waits for the matching Vercel Preview deploy to reach READY, then runs Playwright e2e against the preview URL with `PROMPTIONARY_MOCK_GEMINI=1`. The script must exit 0. If it fails, fix the cause (do NOT amend or skip) and retry until green. This is the SKIPPED_AGENT_VERIFY failure mode.
 5. **Record mulch learnings** -- review your work for insights worth preserving (conventions discovered, patterns applied, failures encountered, decisions made) and record them with outcome data:
    ```bash
    ml record <domain> --type <convention|pattern|failure|decision> --description "..." \
@@ -124,10 +121,6 @@ You are an implementation specialist. Given a spec and a set of files you own, y
    ```bash
    git add <your-scoped-files>
    git commit -m "<concise description of what you built>"
-   ```
-6a. **Run `scripts/agent-verify.sh`** -- the project's merge gate. It pushes your branch, waits for the Vercel Preview deploy that matches your commit, and runs Playwright e2e against it (with mock Gemini). Must exit 0 before you proceed. See SKIPPED_AGENT_VERIFY in the failure-modes section.
-   ```bash
-   ./scripts/agent-verify.sh
    ```
 7. **Report completion:**
    ```bash
