@@ -1,4 +1,4 @@
-# Agent Factory — Status & Handoff (2026-04-27)
+# Agent Factory — Status & Handoff (2026-04-27, v2-prep update)
 
 This doc captures where the autonomous-issue-to-PR loop stands so a fresh
 Claude Code session can resume without re-deriving everything.
@@ -35,8 +35,9 @@ Claude Code session can resume without re-deriving everything.
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  GitHub PR  → Vercel Preview deploy auto-builds                 │
-│  Currently NO automated browser test against the preview.       │
-│  PR sits open for human review/merge.                           │
+│  + .github/workflows/preview-e2e.yml runs Playwright against    │
+│    the matching Preview deploy (PROMPTIONARY_MOCK_GEMINI=1).    │
+│  PR sits open for human review/merge once green.                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -77,32 +78,39 @@ Claude Code session can resume without re-deriving everything.
    - 1 dark-mode `design-tokens.spec.ts:125` — possibly stale preview
      cache, builder's diff didn't touch `<main>` background.
 
-3. **`agent-verify.sh` was added to `builder.md` but the lead is the one
-   that verifies.** Two options for v2: drop the script entirely and
-   delegate to CI, or move the requirement into `lead.md`. CI is
-   cleaner — see "v2 plan" below.
+3. **~~`agent-verify.sh` was added to `builder.md` but the lead is the one
+   that verifies.~~** RESOLVED 2026-04-27. `builder.md` no longer references
+   `scripts/agent-verify.sh`; the script is left in place as a manual
+   utility but is not part of any agent flow. Preview verification is now
+   handled by `.github/workflows/preview-e2e.yml`.
 
-## v2 plan (not yet shipped)
+## v2 plan
 
 To get true 10-min/issue throughput:
 
-1. **Drop `agent-verify.sh` from agent-defs.** Browser tests move to CI.
-2. **Add `.github/workflows/preview-e2e.yml`** — fires on PR open/sync,
-   polls Vercel for the matching `meta.githubCommitSha` deploy, runs
+1. ~~**Drop `agent-verify.sh` from agent-defs.**~~ DONE 2026-04-27.
+   `builder.md` no longer requires the script; `scripts/agent-verify.sh`
+   stays as a manual utility.
+2. ~~**Add `.github/workflows/preview-e2e.yml`**~~ DONE 2026-04-27.
+   Fires on `pull_request` open/sync/reopen, polls Vercel for the
+   matching `meta.githubCommitSha` deploy, runs
    `PROMPTIONARY_TEST_URL=<preview> PROMPTIONARY_MOCK_GEMINI=1 bun test:e2e`.
-3. **Branch protection on `main`** — require the new check + the
-   existing build check. Allows `gh pr merge --auto` to actually wait
-   for green before merging.
+   **Requires:** `VERCEL_TOKEN` repo secret. Add at
+   github.com/tehreet/promptionary/settings/secrets/actions.
+3. **Branch protection on `main`** — TODO (user action). Require the
+   `e2e` check (from `preview-e2e.yml`) + existing build check. Allows
+   `gh pr merge --auto` to actually wait for green before merging.
 4. **Greenhouse listens for `agent-ready` AND `agent-swarm` labels.**
    discord-ticket's SKILL.md gets a small section to classify scope and
    add the right label. Greenhouse keeps coordinator dispatch (single
    capability per repo per spec); the lead reads the spec and picks
    atomic-vs-swarm internally (atomic = 1 builder, no scout/reviewer;
    swarm = full overstory tree).
-5. **Reduce Playwright workers to 2** in `playwright.config.ts` so
-   parallel anon-auth bursts stop timing out.
-6. **Set Vercel Preview env vars** to mirror prod (OAuth client IDs,
-   etc.) so the e2e suite isn't fighting environmental drift.
+5. ~~**Reduce Playwright workers to 2**~~ DONE 2026-04-27. `workers: 2`
+   in `playwright.config.ts`.
+6. **Set Vercel Preview env vars to mirror prod** — TODO (user action).
+   OAuth client IDs etc., so the e2e suite isn't fighting environmental
+   drift. `PROMPTIONARY_MOCK_GEMINI=1` is already set on Preview.
 
 ## Vercel preview env
 
@@ -148,6 +156,7 @@ These write to `.claude/settings.local.json` which is gitignored.
 3. `cat .greenhouse/config.yaml` — current daemon config. May need
    `daily_cap` / `max_concurrent` tuned before restart.
 4. `greenhouse status` to see if daemon is running.
-5. Start with v2 plan task 1 (drop agent-verify.sh from agent-defs) →
-   2 (CI workflow) → 3 (branch protection) → tune playwright workers → fire
-   the daemon and watch one issue end-to-end.
+5. Remaining v2 work: task 3 (branch protection on main, requires user
+   action in GitHub settings) → task 4 (agent-swarm label classification
+   in discord-ticket) → task 6 (mirror prod OAuth env to Vercel Preview)
+   → fire the daemon and watch one issue end-to-end.

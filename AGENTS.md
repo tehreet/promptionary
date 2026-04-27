@@ -45,7 +45,7 @@ Spectator mode (with mid-game join, drag-and-drop assignment, prompt modifiers, 
 - `@google/genai` SDK — `gemini-2.5-flash` (text), `gemini-3.1-flash-image-preview` → `gemini-2.5-flash-image` fallback (image), `gemini-embedding-001` (scoring)
 - next-themes for dark/light, Unbounded for headings, Geist for body
 - canvas-confetti, qrcode.react
-- Vercel host, Playwright e2e (4 workers, parallel)
+- Vercel host, Playwright e2e (2 workers, parallel)
 
 ## Architectural notes
 
@@ -157,7 +157,7 @@ Spectator mode (with mid-game join, drag-and-drop assignment, prompt modifiers, 
   - `theme-packs.spec.ts` — pack selector propagates to lobby pill; artist mode hides it
   - `vote-to-skip.spec.ts` — 50% vote skips a bad generation; cap of 2 skips per round (mock-Gemini)
 - Tests create throwaway rooms each run. No cleanup step is needed.
-- Supabase's free-tier anon-auth rate limit bites when running >3 workers. Prefer `--workers=2` locally; prod is fine at default parallelism because tests run less often.
+- Supabase's free-tier anon-auth rate limit bites when running >3 workers. The repo default in `playwright.config.ts` is `workers: 2`; the `preview-e2e` GitHub Action and local runs both inherit it.
 
 ## Services
 
