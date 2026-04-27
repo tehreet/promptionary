@@ -132,7 +132,13 @@ ov sling <task-id> \
 
 ## task-complexity-assessment
 
-Before spawning any workers, assess task complexity to determine the right pipeline:
+Before spawning any workers, assess task complexity to determine the right pipeline.
+
+**Check the GitHub issue labels first.** Greenhouse-dispatched specs include a `## Labels` section near the top (see `.greenhouse/<seedsId>-spec.md` if your overlay points there). The label is the human's pre-classification of scope:
+
+- **`agent-swarm` present** → treat as Complex regardless of file count. Use the full Scout → Build → Verify pipeline. The user's interview already concluded this is a multi-subsystem change worth the ceremony.
+- **`agent-ready` only (no `agent-swarm`)** → default to atomic execution. Bias toward Simple or Moderate per the criteria below; the issue was scoped as a single coherent change. With **MAX AGENTS = 1** in your overlay, do the work yourself; otherwise spawn at most one builder and self-verify.
+- **No agent labels** (e.g., manual `ov sling` dispatch) → fall through to the size-based criteria below.
 
 ### Simple Tasks (Lead Does Directly)
 Criteria — ALL must be true:
