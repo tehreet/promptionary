@@ -31,8 +31,10 @@ export async function POST(req: Request) {
     .select("id, room_id, round_num, prompt, artist_player_id")
     .eq("id", round_id)
     .maybeSingle();
-  if (!round)
+  if (!round) {
+    console.warn("[start-round] round not found", round_id);
     return NextResponse.json({ error: "round not found" }, { status: 404 });
+  }
 
   const { data: room } = await svc
     .from("rooms")
@@ -41,8 +43,10 @@ export async function POST(req: Request) {
     )
     .eq("id", round.room_id)
     .maybeSingle();
-  if (!room)
+  if (!room) {
+    console.warn("[start-round] room not found", round.room_id);
     return NextResponse.json({ error: "room not found" }, { status: 404 });
+  }
 
   // On default modes the host drives start-round. On artist mode, any room
   // member can POST here after the artist submits their prompt — the flip
