@@ -6,6 +6,7 @@ domains:
   - playwright
   - vercel
   - database-migrations
+  - ui-patterns
 governance:
   max_entries: 100
   warn_entries: 150
