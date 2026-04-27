@@ -1,0 +1,40 @@
+## Conversation
+User said "task 6 i want agent factory" — meaning ship v2 task 6 (mirror prod OAuth env to Vercel Preview, per docs/agent-factory-status.md) so the preview-e2e check goes green on agent-produced PRs without admin override.
+
+## Actions
+1. Listed Vercel env vars on prod and preview via `vercel env ls`. They're identical except Preview also has PROMPTIONARY_MOCK_GEMINI=1. NO OAuth-related env vars exist on either side.
+2. Queried Supabase Management API auth config at /v1/projects/cuevgbducxnbdslbhlxe/config/auth. Found:
+   - `external_google_enabled: false` and `external_discord_enabled: false` with null client_id and secret on both providers
+   - `passkey_enabled: false` (Supabase's own passkey feature; the codebase uses SimpleWebAuthn which doesn't depend on this)
+   - `uri_allow_list` already includes the wildcard `https://promptionary-*-tehreets-projects.vercel.app/auth/callback`, so redirects work for any preview deploy
+3. Curl'd https://promptionary.io/sign-in and https://promptionary-o0nncidao-tehreets-projects.vercel.app/sign-in (the PR #100 head preview). Both render IDENTICAL button text:
+   - "Continue with Google" / "Continue with Discord" / "Continue with Vercel" / "Send magic link"
+   - NO "Continue with a passkey" in the SSR HTML (the passkey button mounts client-side; the inner-mode button text is "Use a passkey")
+4. Ran `bun test:e2e --grep "auth|passkey"` against the preview URL with PROMPTIONARY_MOCK_GEMINI=1. Got 4 failures, all pure text-mismatch:
+   - auth.spec.ts:18 + 42 — looks for /Email me a sign-in link/, code has "Send magic link"
+   - passkey.spec.ts:7 + 131 + 161 — looks for /Continue with a passkey/, code has "Use a passkey"
+5. Read app/sign-in/sign-in-card.tsx:183 ("Send magic link") and components/passkey-buttons.tsx:266 ("Use a passkey") to confirm.
+6. Fixed both spec files via Edit replace_all on the regex literals.
+7. Re-ran the auth+passkey specs against the same preview URL. All 10 green in 11.6s.
+
+## Errors & Mistakes
+- The handoff doc's hypothesis ("3 OAuth/passkey specs — likely missing OAuth client IDs in Vercel Preview env (or hitting different Supabase project than prod)") was wrong on every count. Same Supabase project on both. No OAuth env vars in either env. The Supabase OAuth providers are disabled at project level, but the buttons render unconditionally so visibility-only tests don't care.
+- I initially created tasks for Supabase allowlist inspection (task 16) and "apply allowlist fix" (task 18). Both turned out to be misdiagnoses. Deleted them rather than completed.
+
+## Dead Ends
+- Considered enabling Google + Discord OAuth in Supabase. Skipped: the visibility-only tests pass without it, and enabling OAuth requires real client IDs/secrets the user would have to provide.
+
+## Hints for Future Agents
+- The dark-mode design-tokens spec at line 125 ("non-landing pages flip canvas in dark mode") is a REAL CSS bug, not test drift. <main> on /leaders and /sign-in returns rgb(255, 247, 214) under both light and dark color schemes. Page-level main needs dark-mode background tokens. Separate PR.
+- Update docs/agent-factory-status.md to remove the OAuth-env hypothesis and replace it with the actual fix that landed: stale test text. Otherwise future agents will repeat the diagnosis.
+- The OAuth providers in Supabase ARE disabled (Google/Discord client_id null). If anyone ever clicks "Continue with Google" on prod, they'll see Supabase's "provider is not enabled" error. Sign-in card line 63-65 already has friendly error handling for this case. Worth flagging to the human if they care about live OAuth working — but it's out of scope for this v2 task.
+- The 12 gameplay-spec timeouts mentioned in the handoff doc (Supabase anon-auth rate limit at 4 workers) — those should resolve by playwright workers being dropped to 2 in PR #99. If they're still timing out at 2 workers, the rate limit is tighter than estimated and worth raising on the Supabase side.
+
+## Codebase Discoveries
+- /home/joshf/.supabase/access-token holds the Supabase Management API token. Hits api.supabase.com at /v1/projects/<id>/config/auth for the full project auth config dump.
+- The Supabase project (cuevgbducxnbdslbhlxe) is shared between prod and Preview. There's no per-env Supabase project. So all auth config (provider enables, redirect allowlist, site URL) is global.
+- Vercel env vars listed via `vercel env ls preview` shows ONLY 5 vars on Preview. CRON_SECRET is prod-only, which is correct — preview doesn't run cron.
+
+## Open Questions
+- Should sign-in-card.tsx be guarded so disabled OAuth providers don't render at all (instead of failing on click)? Out of scope for this PR but worth a follow-up.
+- Why was the test text out of sync? The lib/sfx + UI evolution likely renamed buttons in a UX pass without updating the e2e specs in the same commit. No regression test exists for "tests still pass" — the preview-e2e workflow we just shipped (PR #99) IS that regression test, going forward.
