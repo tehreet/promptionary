@@ -54,8 +54,10 @@ playwright-report/
 # Greenhouse / overstory daemon runtime state (not config)
 .greenhouse/state.jsonl
 .greenhouse/state.jsonl.bak
+.greenhouse/state.jsonl.*
 .greenhouse/daemon.pid
 .greenhouse/daemon.log
+.greenhouse/*-spec.md
 .overstory/agents/
 .overstory/worktrees/
 .overstory/specs/
@@ -63,6 +65,7 @@ playwright-report/
 .overstory/sessions.db*
 .overstory/session-branch.txt
 .overstory/.claude/
+.overstory/groups.json
 .mulch/expertise/.lock
 .canopy/.lock
 .seeds/.lock
