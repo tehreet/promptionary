@@ -41,6 +41,18 @@ async function bumpPromptingDeadlineIfTight(
   }
 }
 
+async function roomIdForRound(
+  svc: ReturnType<typeof createSupabaseServiceClient>,
+  roundId: string,
+): Promise<string | null> {
+  const { data } = await svc
+    .from("rounds")
+    .select("room_id")
+    .eq("id", roundId)
+    .maybeSingle();
+  return data?.room_id ?? null;
+}
+
 export async function POST(req: Request) {
   const { round_id, prompt } = await req.json();
   if (!round_id || typeof prompt !== "string") {
@@ -86,6 +98,13 @@ export async function POST(req: Request) {
     if (words && words.length > 0) {
       const hit = findTabooHit(trimmedPrompt, words);
       if (hit) {
+        try {
+          const svc = createSupabaseServiceClient();
+          const rid = await roomIdForRound(svc, round_id);
+          if (rid) await bumpPromptingDeadlineIfTight(svc, rid);
+        } catch {
+          // best-effort — never mask the real rejection
+        }
         return errJson(
           {
             error: "taboo hit",
@@ -103,6 +122,13 @@ export async function POST(req: Request) {
   try {
     const verdict = await moderatePrompt(trimmedPrompt);
     if (!verdict.safe) {
+      try {
+        const svc = createSupabaseServiceClient();
+        const rid = await roomIdForRound(svc, round_id);
+        if (rid) await bumpPromptingDeadlineIfTight(svc, rid);
+      } catch {
+        // best-effort — never mask the real rejection
+      }
       return errJson(
         {
           error: "prompt rejected",

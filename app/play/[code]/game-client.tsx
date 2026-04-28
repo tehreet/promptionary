@@ -206,6 +206,10 @@ function GameClientInner({
   const [skipSubmitting, setSkipSubmitting] = useState<boolean>(false);
   const [skipError, setSkipError] = useState<string | null>(null);
   const skipTriggeredRef = useRef<string | null>(null);
+  // Persist artist prompt draft across phase bounces (image-gen failure rolls
+  // phase back to 'prompting', unmounting ArtistPromptingView and resetting
+  // local state before the 502 response reaches the client).
+  const artistDraftRef = useRef<{ roundId: string; text: string } | null>(null);
   const isHost = room.host_id === currentPlayerId;
 
   const competitorCount = useMemo(
@@ -1468,6 +1472,10 @@ function GameClientInner({
               : undefined
           }
           remaining={remaining}
+          savedDraft={artistDraftRef.current}
+          onDraftChange={(roundId, text) => {
+            artistDraftRef.current = { roundId, text };
+          }}
         />
       )}
 
@@ -2149,20 +2157,38 @@ function NumField({
   );
 }
 
+// Decide what text to seed the artist textarea with on (re)mount. Pure so
+// it can be unit-tested without React. The mount can fire mid-round when
+// image-gen failure rolls phase back to 'prompting' (see artistDraftRef in
+// GameClientInner).
+export function restoreArtistDraft(
+  saved: { roundId: string; text: string } | null,
+  roundId: string | undefined,
+): string {
+  if (!saved || !roundId) return "";
+  return saved.roundId === roundId ? saved.text : "";
+}
+
 function ArtistPromptingView({
   room,
   currentRound,
   iAmArtist,
   artist,
   remaining,
+  savedDraft,
+  onDraftChange,
 }: {
   room: Room;
   currentRound: Round | null;
   iAmArtist: boolean;
   artist: Player | undefined;
   remaining: number;
+  savedDraft: { roundId: string; text: string } | null;
+  onDraftChange: (roundId: string, text: string) => void;
 }) {
-  const [prompt, setPrompt] = useState<string>("");
+  const [prompt, setPrompt] = useState<string>(() =>
+    restoreArtistDraft(savedDraft, currentRound?.id),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejectCount, setRejectCount] = useState(0);
@@ -2353,13 +2379,14 @@ function ArtistPromptingView({
                 id="artist-prompt-error"
                 role="alert"
                 data-artist-error="1"
-                className="bg-red-500/20 border-2 border-red-500/50 rounded-xl px-4 py-3 text-base font-semibold"
+                className="bg-red-500/20 border-2 border-red-500 rounded-xl px-4 py-4 shadow-sm"
               >
-                <div className="text-red-600 font-black uppercase tracking-wider text-xs mb-1">
-                  ❌ Rejected — your draft is still here, tweak and resend
+                <div className="text-red-600 dark:text-red-400 font-black uppercase tracking-wider text-xs mb-2 flex items-center gap-1.5">
+                  <span aria-hidden="true">❌</span>
+                  <span>Prompt rejected — your draft is saved, tweak and resend</span>
                 </div>
-                <div>{error}</div>
-                {rejectCount >= 2 && (
+                <div className="text-base font-semibold">{error}</div>
+                {rejectCount >= 3 && (
                   <div className="mt-2 text-sm font-normal opacity-90">
                     Stuck? Try a simpler subject — avoid celebrities, real
                     people, or named characters.
@@ -2371,7 +2398,9 @@ function ArtistPromptingView({
               ref={textareaRef}
               value={prompt}
               onChange={(e) => {
-                setPrompt(e.target.value);
+                const val = e.target.value;
+                setPrompt(val);
+                if (currentRound?.id) onDraftChange(currentRound.id, val);
                 // Clear the error on the first keystroke so it doesn't nag.
                 if (error) setError(null);
               }}
