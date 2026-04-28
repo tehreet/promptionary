@@ -68,6 +68,39 @@ Claude Code session can resume without re-deriving everything.
    supervisor should set an env var or workdir that the hooks recognize
    as "greenhouse supervisor → allow git push + gh ops."
 
+   **Related: the standalone push-block hook resets on every `ov hooks
+   install`.** That hook lacks the `[ -z "$OVERSTORY_AGENT_NAME" ] && exit 0`
+   guard the rest of the file uses, so it blocks `git push` for normal
+   interactive Claude Code sessions in this repo too. Re-add the guard
+   after any agent run that calls `ov hooks install`.
+
+1a. **Multi-dispatch contamination via shared `session-branch.txt`** (NEW,
+    discovered 2026-04-27 dogfood run). `dispatcher.ts` writes
+    `.overstory/session-branch.txt` and checks out the per-run merge
+    branch on EVERY dispatch. With `max_concurrent: 5`, greenhouse fires
+    all dispatches back-to-back and the LAST checkout wins. Every lead
+    that subsequently calls `ov merge` then merges its builder's work
+    into whichever merge branch was the most recent dispatch — not the
+    one for its OWN run. Net result on 2026-04-27 dogfood: 5 issues
+    dispatched concurrently (#88, #89, #90, #91, #92), greenhouse picked
+    #93 last via manual ingest, and `greenhouse/promptionary-d414` ended
+    up with merges from #91 + #89's builders even though it's supposed
+    to be #93's branch. Builder #92's branch was also contaminated.
+
+    **Recovery from this run:** stopped daemon, killed all sessions, and
+    cherry-picked the 4 clean focused commits from
+    `overstory/builder-*/` branches onto fresh branches off main:
+    `agent/89-start-round-404` → PR #106, `agent/90-chat-autoscroll` → PR #105,
+    `agent/91-realtime-broadcast-guard` → PR #107, `agent/92-preserve-artist-draft` → PR #108.
+    Issues #88 + #93 had no builder commits yet; their leads/builders
+    hadn't run by the time we stopped.
+
+    **Mitigation:** drop `max_concurrent` from 5 → 1 in
+    `.greenhouse/config.yaml` so dispatches serialize. The fix in
+    greenhouse itself is to use a per-run dispatch directory + isolated
+    HEAD checkout (e.g. `git worktree add` per merge branch instead of
+    swapping the canonical repo's HEAD).
+
 2. **Preview e2e drift.** Status as of 2026-04-27 against a fresh
    Vercel Preview: 6 failing specs vs ~63 passing.
    - ~~12 gameplay specs timing out on Supabase anon-auth rate limit~~
