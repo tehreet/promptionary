@@ -126,12 +126,16 @@ export function ChatPanel({
     return messages.filter((m) => m.team == null);
   }, [messages, tab]);
 
-  // Auto-scroll to bottom on new message
+  // Auto-scroll on new messages, panel open (collapsed→false), or tab switch.
+  // `collapsed` covers the floating variant: messages may have arrived while
+  // hidden, so we scroll when the panel becomes visible rather than relying on
+  // a length change that already fired against a null ref.
+  // `tab` covers the case where both tabs have equal message counts.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [visibleMessages.length]);
+  }, [visibleMessages.length, collapsed, tab]);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();

@@ -32,3 +32,39 @@ test("chat: two players swap messages in the lobby", async ({ browser }) => {
   await hostCtx.close();
   await joinerCtx.close();
 });
+
+test("chat: scroll lands at bottom after messages overflow the panel", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+
+  const hostCtx = await browser.newContext();
+  const host = await hostCtx.newPage();
+  await createRoomAs(host, `Host${Date.now()}`);
+
+  // Send enough messages to overflow the 280px lobby chat panel (≈5 messages
+  // fills it; 10 guarantees overflow regardless of font/zoom).
+  const hostInput = host.getByPlaceholder(/Say something/);
+  await hostInput.waitFor({ state: "visible", timeout: 15_000 });
+
+  for (let i = 1; i <= 10; i++) {
+    await hostInput.fill(`overflow message ${i}`);
+    await host.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(host.getByText(`overflow message ${i}`)).toBeVisible({
+      timeout: 8_000,
+    });
+  }
+
+  // The scroll container must be at the bottom so the newest message is
+  // visible without the user manually scrolling.
+  const atBottom = await host.evaluate(() => {
+    const el = document.querySelector<HTMLElement>(
+      "[data-chat-panel='1'] .overflow-y-auto",
+    );
+    if (!el) return false;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - 5;
+  });
+  expect(atBottom).toBe(true);
+
+  await hostCtx.close();
+});
