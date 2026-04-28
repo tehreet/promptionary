@@ -420,6 +420,7 @@ function GameClientInner({
   }, [room.id, room.round_num]);
 
   const [startError, setStartError] = useState<string | null>(null);
+  const [startRound404, setStartRound404] = useState(false);
 
   // Host (or the artist on artist-mode) triggers /api/start-round when
   // phase=generating. On artist mode the artist already submitted their
@@ -442,6 +443,7 @@ function GameClientInner({
     if (!isHost) return;
     generatingCalledRef.current = currentRound.id;
     setStartError(null);
+    setStartRound404(false);
     (async () => {
       try {
         const res = await fetch("/api/start-round", {
@@ -451,7 +453,15 @@ function GameClientInner({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setStartError(body.detail || body.error || `status ${res.status}`);
+          console.error("[start-round] error", res.status, body);
+          if (res.status === 404) {
+            // Round or room was cleaned up server-side (e.g. prior Gemini
+            // failure). The 2s poll will pick up the updated room.phase and
+            // recover naturally — show a soft message instead of an error UI.
+            setStartRound404(true);
+          } else {
+            setStartError(body.detail || body.error || `HTTP ${res.status}`);
+          }
         }
       } catch (e) {
         setStartError(e instanceof Error ? e.message : String(e));
@@ -1473,8 +1483,16 @@ function GameClientInner({
 
       {room.phase === "generating" && (
         <div className="flex flex-col items-center gap-4 py-20 max-w-xl text-center">
-          {startError ? (
-            <>
+          {startRound404 ? (
+            <div data-start-404="1">
+              <ArtLoader size="lg" />
+              <p className="text-xl font-bold mt-4">Round was reset — hanging tight…</p>
+              <p className="opacity-70 text-sm mt-1">
+                The game will continue automatically.
+              </p>
+            </div>
+          ) : startError ? (
+            <div data-start-error="1">
               <p className="text-2xl font-black">Image generation failed</p>
               <pre className="text-xs bg-black/30 rounded-xl p-3 whitespace-pre-wrap break-all max-w-full">
                 {startError}
@@ -1484,7 +1502,7 @@ function GameClientInner({
                   ? "You'll be dropped back to the lobby shortly."
                   : "The host is trying again."}
               </p>
-            </>
+            </div>
           ) : (
             <>
               <ArtLoader size="lg" />
