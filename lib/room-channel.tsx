@@ -23,6 +23,21 @@ type RoomChannelValue = {
 
 const Ctx = createContext<RoomChannelValue | null>(null);
 
+// Safe wrapper around channel.send(). Silently drops the message if the
+// channel is null (not yet subscribed) or is not in the 'joined' state
+// (e.g. mid-reconnect after a socket blip or the 25-min setAuth rejoin).
+// Using channel.send() directly in those windows falls back to REST and logs
+// a deprecation warning; in high-frequency callers (cursor broadcasts at 20Hz)
+// that floods the console and can spiral into a React render-loop crash.
+export function broadcast(
+  channel: RealtimeChannel | null,
+  args: { event: string; payload: unknown },
+): void {
+  if (!channel) return;
+  if (channel.state !== "joined") return;
+  channel.send({ type: "broadcast", event: args.event, payload: args.payload });
+}
+
 // Re-auth the realtime socket before the 1h Supabase JWT expires. The browser
 // client bridges the cookie token via realtime.setAuth() exactly once at
 // construction; without this loop the socket silently loses auth and

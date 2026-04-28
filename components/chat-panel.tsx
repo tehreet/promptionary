@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRoomChannel } from "@/lib/room-channel";
+import { broadcast, useRoomChannel } from "@/lib/room-channel";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -183,13 +183,7 @@ export function ChatPanel({
       }
       const { data: latest } = await query.maybeSingle();
       if (latest) {
-        if (channel) {
-          channel.send({
-            type: "broadcast",
-            event: "chat",
-            payload: latest,
-          });
-        }
+        broadcast(channel, { event: "chat", payload: latest });
         setMessages((prev) => {
           if (prev.some((m) => m.id === (latest as ChatMessage).id)) return prev;
           return [...prev, latest as ChatMessage];
